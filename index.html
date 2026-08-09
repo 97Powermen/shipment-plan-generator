@@ -39,8 +39,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .header-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; margin-top: 4px; }
 .header-text h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; line-height: 1.3; }
 .header-text p { color: rgba(255,255,255,0.8); font-size: 13px; margin: 0; }
-.header-home-btn { position: absolute; top: 12px; right: 20px; z-index: 2; color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500; padding: 5px 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; transition: all .2s; white-space: nowrap; }
-.header-home-btn:hover { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.5); }
+
+/* Home button inside mode-selector */
+a.mode-btn { display: inline-flex; align-items: center; text-decoration: none; }
+.mode-btn.home-btn { border-radius: 20px; }
 
 /* Mode Selector */
 .mode-selector { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; position: relative; z-index: 1; }
@@ -377,7 +379,6 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
 
 <!-- Header -->
 <div class="header">
-  <a href="https://97powermen.github.io/supply-chain-hub/" class="header-home-btn" title="返回主页">🏠 主页</a>
   <div class="header-left">
     <div class="header-icon">📦</div>
     <div class="header-text">
@@ -386,6 +387,7 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
     </div>
   </div>
   <div class="mode-selector">
+    <a href="https://97powermen.github.io/supply-chain-hub/" class="mode-btn home-btn" title="返回主页">🏠 主页</a>
     <button class="mode-btn active" id="modeBtn1" onclick="switchMode('forecast')">📈 预测销量调整方案</button>
     <button class="mode-btn" id="modeBtn2" onclick="switchMode('supply')">⚠️ 可供不足调整方案</button>
     <button class="mode-btn" id="modeBtn3" onclick="switchMode('batch')">📊 批量产品计算方案</button>
