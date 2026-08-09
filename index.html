@@ -30,20 +30,23 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-.container { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
+.container { max-width: 1180px; margin: 0 auto; padding: 0 20px 60px; }
 
 /* Header */
-.header { text-align: center; padding: 32px 0 28px; }
-.header h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-.header p { color: var(--text-secondary); font-size: 14px; }
+.header { background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%); border-radius: 0 0 12px 12px; padding: 28px 24px 28px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; box-shadow: 0 4px 16px rgba(37,99,235,0.25); position: relative; overflow: hidden; flex-wrap: wrap; gap: 16px; }
+.header::before { content: ''; position: absolute; right: -40px; top: -40px; width: 180px; height: 180px; background: rgba(255,255,255,0.08); border-radius: 50%; }
+.header-left { display: flex; align-items: flex-start; gap: 14px; position: relative; z-index: 1; }
+.header-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; margin-top: 4px; }
+.header-text h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; line-height: 1.3; }
+.header-text p { color: rgba(255,255,255,0.8); font-size: 13px; margin: 0; }
 
 /* Mode Selector */
-.mode-selector { display: flex; gap: 6px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
-.mode-btn { padding: 8px 18px; border: 2px solid var(--border); border-radius: 20px; background: var(--card-bg); font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all .2s; white-space: nowrap; }
-.mode-btn:hover { border-color: var(--primary); color: var(--primary); }
-.mode-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.mode-selector { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; position: relative; z-index: 1; }
+.mode-btn { padding: 6px 16px; border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; background: rgba(255,255,255,0.15); font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.9); cursor: pointer; transition: all .2s; white-space: nowrap; }
+.mode-btn:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.5); }
+.mode-btn.active { background: #fff; color: #2563eb; border-color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .mode-btn .badge { display: inline-block; background: rgba(255,255,255,.25); padding: 1px 7px; border-radius: 10px; font-size: 11px; margin-left: 4px; }
-.mode-btn.active .badge { background: rgba(255,255,255,.3); }
+.mode-btn.active .badge { background: rgba(37,99,235,.12); color: #2563eb; }
 
 /* Cards */
 .card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; border: 1px solid var(--border); }
@@ -120,6 +123,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .result-table th { position: sticky; top: 0; z-index: 10; background: #e8e8e8; color: var(--text); padding: 10px 10px; font-weight: 600; text-align: center; font-size: 12px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
 .result-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: center; }
 .result-table tr:nth-child(even) td { background: var(--bg); }
+
+/* Arrival detail columns — expandable like Excel group */
+.arrival-detail-col.collapsed { display: none; }
+.arrival-toggle-btn {
+  background: none; border: none; color: var(--primary); cursor: pointer;
+  font-size: 14px; font-weight: 700; padding: 2px 4px; line-height: 1;
+  border-radius: 3px; transition: background .15s; vertical-align: middle;
+}
+.arrival-toggle-btn:hover { background: rgba(37,99,235,0.1); }
+.arrival-toggle-btn.collapsed::after { content: '▸'; }
+.arrival-toggle-btn:not(.collapsed)::after { content: '▾'; }
+.arrival-detail-cell { font-size: 12px; color: var(--text-muted); }
+
+/* Highlight arrival detail headers when expanded */
+.arrival-detail-header {
+  background: #f0f4ff !important;
+  color: #4f46e5 !important;
+  font-weight: 600;
+}
+.result-table thead tr th.arrival-detail-header,
+.result-table thead tr th.arrival-detail-col {
+  background: #f0f4ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
 .result-table .cell-warn { background: var(--warning-light) !important; color: var(--warning); font-weight: 600; }
 .result-table .cell-danger { background: var(--danger-light) !important; color: var(--danger); font-weight: 600; }
 .result-table .cell-ok { color: var(--success); font-weight: 600; }
@@ -347,8 +375,13 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
 
 <!-- Header -->
 <div class="header">
-  <h1>产品出货衔接方案生成器</h1>
-  <p>根据库存、销量与产能，自动生成最经济的订单出运方案</p>
+  <div class="header-left">
+    <div class="header-icon">📦</div>
+    <div class="header-text">
+      <h1>产品出货衔接方案生成器</h1>
+      <p>根据库存、销量与产能，自动生成最经济的订单出运方案</p>
+    </div>
+  </div>
   <div class="mode-selector">
     <button class="mode-btn active" id="modeBtn1" onclick="switchMode('forecast')">📈 预测销量调整方案</button>
     <button class="mode-btn" id="modeBtn2" onclick="switchMode('supply')">⚠️ 可供不足调整方案</button>
@@ -694,6 +727,9 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
       <button class="btn btn-outline" onclick="document.getElementById('batchFileInput').click()">📂 导入产品数据</button>
       <input type="file" id="batchFileInput" accept=".xlsx,.xls" style="display:none" onchange="batchImportData(this)">
       <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
+      <button class="btn btn-outline" onclick="document.getElementById('trackingFileInput').click()">📋 导入采购跟踪表</button>
+      <input type="file" id="trackingFileInput" accept=".xlsx,.xls" style="display:none" onchange="importTrackingTable(this)">
+      <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
       <button class="btn btn-outline btn-sm" onclick="saveTemplate()">💾 保存当前模板</button>
       <button class="btn btn-outline btn-sm" onclick="loadTemplate()">📂 加载保存的模板</button>
       <button class="btn btn-outline btn-sm" onclick="resetAll()">🔄 重置</button>
@@ -878,6 +914,8 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
                 <th>存货名称</th>
                 <th>规格型号</th>
                 <th>梯队</th>
+                <th>国内在途</th>
+                <th>国内在制</th>
                 <th>总需求</th>
                 <th>建议下单</th>
                 <th>产能分配</th>
@@ -1067,12 +1105,20 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
     </div>
     <div class="result-table-wrap">
       <table class="result-table" id="planTable">
+        <colgroup>
+          <col><col><col><col>
+          <col class="arrival-detail-col"><col class="arrival-detail-col"><col class="arrival-detail-col">
+          <col><col><col><col><col><col class="supplyCapColHdr"><col><col><col><col><col><col><col><col>
+        </colgroup>
         <thead>
           <tr>
             <th>周次</th>
             <th>日期范围</th>
             <th>期初可售</th>
-            <th>本周到货</th>
+            <th>本周到货 <button class="arrival-toggle-btn" id="arrivalToggleBtn" onclick="toggleArrivalDetail()" title="展开/折叠到货明细"></button></th>
+            <th class="arrival-detail-col arrival-detail-header">海外仓到货</th>
+            <th class="arrival-detail-col arrival-detail-header">国内在途到仓</th>
+            <th class="arrival-detail-col arrival-detail-header">国内在制到仓</th>
             <th>本周需求</th>
             <th>实际周销量</th>
             <th>预计断货数量</th>
@@ -1720,10 +1766,10 @@ function downloadTemplate() {
   const notes = {
     productVolume: '模式1/2可不填。批量模式（模式3）中，整柜产品需填写单箱体积（m³）以计算整柜装载量；非整柜产品可留空或填0',
     forecastStartMonth: '填写格式：YYYY-MM（如2026-07），表示预测起始月份。后续6个月的预测数据将基于此月份逐月展开为周需求',
-    domInTransit: '多批次填写格式：各批次数量用逗号分隔，如"200,150"。每个值对应一个在途批次的数量，空白则填0',
-    domInTransitWeeks: '多批次填写格式：各批次的到仓周数用逗号分隔，如"5,8"。周数从当前周算起（第1周=本周），数量必须与"国内在途"的批次数一致',
-    domInProd: '多批次填写格式：各批次数量用逗号分隔，如"400,300,300"。每个值对应一个在制批次的预计产出数量，空白则填0',
-    domInProdWeeks: '多批次填写格式：各批次完成生产周数用逗号分隔，如"6,8,10"。周数从当前周算起，数量必须与"国内在制"的批次数一致',
+    domInTransit: '【可选填】多批次填写格式：各批次数量用逗号分隔，如"200,150"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
+    domInTransitWeeks: '【可选填】多批次填写格式：各批次的到仓周数用逗号分隔，如"5,8"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
+    domInProd: '【可选填】多批次填写格式：各批次数量用逗号分隔，如"400,300,300"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
+    domInProdWeeks: '【可选填】多批次填写格式：各批次完成生产周数用逗号分隔，如"6,8,10"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
   };
   IMPORT_FIELDS.forEach((f, i) => { if (notes[f.id]) addNote(ws, i, notes[f.id]); });
   const wb = XLSX.utils.book_new();
@@ -2226,6 +2272,15 @@ function showToast(msg, duration) {
 }
 function fmt(n) { if (n == null || isNaN(n)) return '--'; return Number(n).toLocaleString('zh-CN', {minimumFractionDigits:0,maximumFractionDigits:0}); }
 function fmtMoney(n) { if (n == null || isNaN(n)) return '¥--'; return '¥' + Number(n).toLocaleString('zh-CN', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Compute monthly average forecast from fcM0–fcM5 for batch product list display
+function fmtMonthlyAvg(p) {
+  let total = 0, count = 0;
+  for (let i = 0; i < 6; i++) {
+    const v = parseFloat(p['fcM' + i]);
+    if (!isNaN(v)) { total += v; count++; }
+  }
+  return count > 0 ? fmt(Math.round(total / count)) : '--';
+}
 function fmtWeeks(n) { return (Number(n) % 1 === 0) ? fmt(n) + ' 周' : Number(n).toFixed(1) + ' 周'; }
 function getVal(id) { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? 0 : v; }
 function getStr(id) { return (document.getElementById(id)?.value || '').trim(); }
@@ -2399,7 +2454,7 @@ function getPipelineItems() {
     const weeks = parseInt(row.querySelector('.domTransitWeeks')?.value) || 0;
     if (qty > 0) {
       const label = domTransitRows.length > 1 ? `国内在途 #${i+1}` : '国内在途';
-      items.push({ type: label, qty, current: '国内→FBA', arriveWeek: weeks, desc: '预计 '+weeks+' 周到 FBA 仓', cat: 'dom' });
+      items.push({ type: label, qty, current: '国内→FBA', arriveWeek: weeks, desc: '预计 '+weeks+' 周到 FBA 仓', cat: 'dom', subCat: 'domTransit' });
     }
   });
 
@@ -2410,7 +2465,7 @@ function getPipelineItems() {
     const weeks = parseInt(row.querySelector('.domProdWeeks')?.value) || 0;
     if (qty > 0) {
       const label = domProdRows.length > 1 ? `国内在制 #${i+1}` : '国内在制';
-      items.push({ type: label, qty, current: '国内工厂', arriveWeek: weeks, desc: '预计 '+weeks+' 周后到 FBA 仓', cat: 'dom' });
+      items.push({ type: label, qty, current: '国内工厂', arriveWeek: weeks, desc: '预计 '+weeks+' 周后到 FBA 仓', cat: 'dom', subCat: 'domProd' });
     }
   });
 
@@ -2427,6 +2482,47 @@ function getArrivalsFromPipeline(weeks) {
     }
   });
   return arrivals;
+}
+
+function getArrivalsBreakdown(weeks) {
+  // Returns category breakdown: { fba, osAll, domTransit, domProd }
+  // fba array includes FBA stock (week 0 baseline, NOT counted as "arrival")
+  // osAll: 海外仓在途 + 海外仓库存 + 挪用库存 (merged)
+  // domTransit: 国内在途各批次
+  // domProd: 国内在制各批次
+  const pipeline = getPipelineItems();
+  const fba = new Array(weeks).fill(0);
+  const osAll = new Array(weeks).fill(0);
+  const domTransit = new Array(weeks).fill(0);
+  const domProd = new Array(weeks).fill(0);
+
+  pipeline.forEach(p => {
+    const w = Math.round(p.arriveWeek);
+    if (w >= 0 && w < weeks) {
+      if (p.cat === 'fba') {
+        fba[w] += p.qty;
+      } else if (p.cat === 'os' || p.cat === 'divert') {
+        osAll[w] += p.qty;
+      } else if (p.cat === 'dom') {
+        if (p.subCat === 'domTransit') {
+          domTransit[w] += p.qty;
+        } else if (p.subCat === 'domProd') {
+          domProd[w] += p.qty;
+        } else {
+          // legacy domestic items without subCat — classify by type name
+          if (p.type && p.type.includes('在途')) {
+            domTransit[w] += p.qty;
+          } else if (p.type && p.type.includes('在制')) {
+            domProd[w] += p.qty;
+          } else {
+            osAll[w] += p.qty; // fallback
+          }
+        }
+      }
+    }
+  });
+
+  return { fba, osAll, domTransit, domProd };
 }
 
 // ==================== CORE CALCULATION ====================
@@ -2447,17 +2543,14 @@ function calculatePlan() {
   const demand = getWeeklyDemand(weeks);
   const avgWeeklyDemand = demand.reduce((a,b)=>a+b,0) / demand.length;
   const safetyStock = Math.round(avgWeeklyDemand * safetyWeeks);
+  const weeklySafetyStock = demand.map(d => Math.round(d * safetyWeeks));
 
-  // Per-week safety stock: use the global average-based safety stock so the
-  // deficit detection, order-qty calculation, and chart safety-stock line are
-  // all consistent.  Dynamic safety stock (demand[t] * safetyWeeks) causes
-  // inventory to spike far above the visible safety line when demand jumps in
-  // later months.
   function getSafetyStockForWeek(t) {
-    return safetyStock;
+    return weeklySafetyStock[t] || 0;
   }
   const pipeline = getPipelineItems();
   const baseArrivals = getArrivalsFromPipeline(weeks);
+  const baseBreakdown = getArrivalsBreakdown(weeks);
   const methods = getShippingMethods();
   const actualWeeklySales = getVal('actualWeeklySales') || avgWeeklyDemand;
 
@@ -2468,11 +2561,15 @@ function calculatePlan() {
 
   // Helper: simulate inventory given a set of additional replenishment arrivals
   function simulate(extraArrivals) {
-    let inventory = 0;
+    // 期初可售 = FBA库存（首周已可售库存，不计入"本周到货"）
+    const fbaStock = baseBreakdown.fba[0] || 0;
+    let inventory = fbaStock;
     const plan = [];
     for (let t = 0; t < weeks; t++) {
       const beginInv = inventory;
-      const arrival = baseArrivals[t] + (extraArrivals ? extraArrivals[t] : 0);
+      // arrival = non-FBA pipeline arrivals + replenishment arrivals
+      const pipelineNonFBA = baseArrivals[t] - (baseBreakdown.fba[t] || 0);
+      const arrival = pipelineNonFBA + (extraArrivals ? extraArrivals[t] : 0);
       const dem = demand[t];
       const available = beginInv + arrival;
 
@@ -2506,6 +2603,10 @@ function calculatePlan() {
         leadDays: '--',
         method: null,
         cost: 0,
+        // Arrival breakdown (pipeline only, excl. replenishment)
+        arrivalOsAll: (baseBreakdown.osAll[t] || 0),
+        arrivalDomTransit: (baseBreakdown.domTransit[t] || 0),
+        arrivalDomProd: (baseBreakdown.domProd[t] || 0),
       });
       inventory = endingInv;
     }
@@ -2933,7 +3034,7 @@ function calculatePlan() {
       const soDate = new Date(weekMonday);
       soDate.setDate(weekMonday.getDate() + daysTillStockout);
       stockoutDate = soDate.getFullYear() + '年' + (soDate.getMonth()+1) + '月' + soDate.getDate() + '日';
-    } else if (weeklyPlan[t].endingInv < safetyStock) {
+    } else if (weeklyPlan[t].endingInv < getSafetyStockForWeek(t)) {
       stockoutDate = '库存紧张';
     }
 
@@ -3017,6 +3118,7 @@ function calculatePlan() {
     arrivals: baseArrivals,
     replenArrivals,
     safetyStock,
+    weeklySafetyStock,
     safetyWeeks,
     totalShipCost,
     totalHoldingCost,
@@ -3471,6 +3573,49 @@ function applyContainerAdjustment(plan, productVolume) {
   return { adjusted: true, containerInfo: plan.containerInfo };
 }
 
+// Rebuild DOM batch rows from comma-separated form field values.
+// Needed because getPipelineItems() reads from DOM batch-row inputs,
+// but batch import sets comma-separated strings in hidden form fields.
+function syncDomBatchesFromProduct(product) {
+  const batches = [
+    { fieldQty: 'domInTransit', fieldWeeks: 'domInTransitWeeks', containerId: 'domInTransitBatches', qtyClass: 'domTransitQty', weeksClass: 'domTransitWeeks' },
+    { fieldQty: 'domInProd', fieldWeeks: 'domInProdWeeks', containerId: 'domInProdBatches', qtyClass: 'domProdQty', weeksClass: 'domProdWeeks' },
+  ];
+  batches.forEach(b => {
+    const qtyStr = (product[b.fieldQty] || '').trim();
+    const weeksStr = (product[b.fieldWeeks] || '').trim();
+    if (!qtyStr && !weeksStr) {
+      // No data — clear to default single row with 0
+      const container = document.getElementById(b.containerId);
+      if (container) {
+        container.innerHTML = `<div class="pipeline-batch-row">
+          <div class="form-group"><label>数量</label><input type="number" class="${b.qtyClass}" value="0" min="0" onchange="onPipelineBatchChange()"></div>
+          <div class="form-group"><label>预计到FBA仓（周后）</label><input type="number" class="${b.weeksClass}" value="0" min="0" onchange="onPipelineBatchChange()"></div>
+        </div>`;
+      }
+      return;
+    }
+    const qtys = qtyStr.split(',').map(v => Math.max(0, parseInt(v) || 0));
+    const weeksArr = weeksStr.split(',').map(v => Math.max(0, parseInt(v) || 0));
+    // Pad the shorter array to match length
+    const count = Math.max(qtys.length, weeksArr.length);
+    while (qtys.length < count) qtys.push(0);
+    while (weeksArr.length < count) weeksArr.push(0);
+    const container = document.getElementById(b.containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+      const showDel = count > 1;
+      const row = document.createElement('div');
+      row.className = 'pipeline-batch-row';
+      row.innerHTML = `<div class="form-group"><label>数量</label><input type="number" class="${b.qtyClass}" value="${qtys[i]}" min="0" onchange="onPipelineBatchChange()"></div>
+        <div class="form-group"><label>预计到FBA仓（周后）</label><input type="number" class="${b.weeksClass}" value="${weeksArr[i]}" min="0" onchange="onPipelineBatchChange()"></div>
+        ${showDel ? '<button type="button" class="btn btn-outline btn-sm pipeline-batch-del" onclick="removePipelineBatch(this)" title="删除此批次">✕</button>' : ''}`;
+      container.appendChild(row);
+    }
+  });
+}
+
 function calculatePlanForRow(rowData) {
   // Save current form state (includes supply params)
   const saved = saveFormState();
@@ -3489,7 +3634,7 @@ function calculatePlanForRow(rowData) {
     'productUnit','casesPerUnit','productVolume','regularMethod',
     'currentWeekSales','last4WeeksSales','actualWeeklySales',
     'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks',
-    'divertStock','divertStockWeeks','domInTransit','domInTransitWeeks','domInProd','domInProdWeeks'];
+    'divertStock','divertStockWeeks'];
 
   fields.forEach(id => {
     if (rowData[id] !== undefined) {
@@ -3497,6 +3642,9 @@ function calculatePlanForRow(rowData) {
       if (el) el.value = rowData[id];
     }
   });
+
+  // Sync comma-separated batch data into DOM batch rows for getPipelineItems()
+  syncDomBatchesFromProduct(rowData);
 
   // fcM forecast values — set AFTER renderForecastTable so they go into the
   // freshly rendered inputs and are not wiped by a table rebuild.
@@ -3591,6 +3739,196 @@ function batchImportData(input) {
   input.value = '';
 }
 
+// ==================== TRACKING TABLE IMPORT ====================
+// Import procurement tracking table (采购跟踪表) and auto-fill domestic in-transit/production data
+function importTrackingTable(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (batchProducts.length === 0) {
+    alert('请先导入产品数据，再导入采购跟踪表！');
+    input.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets['全量明细'];
+      if (!ws) {
+        alert('未找到「全量明细」工作表，请确认文件格式正确。');
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      if (rows.length < 2) { alert('跟踪表数据为空'); return; }
+
+      const headers = rows[0].map(h => String(h || '').trim());
+
+      // Find column indices for key fields
+      const colIndex = {};
+      const targetCols = ['打单物料编码', '在途数量', '预计入库时间', '未交数量', '回复出货日期', '运输时效'];
+      headers.forEach((h, i) => {
+        if (targetCols.includes(h)) colIndex[h] = i;
+      });
+
+      // Validate required columns
+      if (!colIndex['打单物料编码']) { alert('未找到「打单物料编码」列'); return; }
+      if (!colIndex['在途数量']) { alert('未找到「在途数量」列'); return; }
+      if (!colIndex['预计入库时间']) { alert('未找到「预计入库时间」列'); return; }
+      if (!colIndex['未交数量']) { alert('未找到「未交数量」列'); return; }
+      if (!colIndex['回复出货日期']) { alert('未找到「回复出货日期」列'); return; }
+      if (!colIndex['运输时效']) { alert('未找到「运输时效」列'); return; }
+
+      // Build product lookup map: 物料编码 → batchProducts index
+      const productMap = {};
+      batchProducts.forEach((p, i) => {
+        if (p.materialCode) {
+          const key = String(p.materialCode).trim();
+          productMap[key] = i;
+        }
+      });
+
+      // Group tracking data by material code
+      // Structure: { materialCode: { transits: [{qty, weeks}], prods: [{qty, weeks}] } }
+      const trackingData = {};
+      let parseErrCount = 0;
+      const now = new Date();
+
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.every(c => c === undefined || c === null)) continue;
+
+        const materialCode = String(row[colIndex['打单物料编码']] || '').trim();
+        if (!materialCode) continue;
+
+        const transitQty = parseFloat(row[colIndex['在途数量']]) || 0;
+        const uncommittedQty = parseFloat(row[colIndex['未交数量']]) || 0;
+        let transitTimeVal = parseFloat(row[colIndex['运输时效']]) || 0;
+
+        // Parse date values (per-field error tolerance, never skip entire row)
+        let etaDate = null;
+        let shipDate = null;
+        const etaRaw = row[colIndex['预计入库时间']];
+        if (etaRaw) {
+          try { etaDate = parseExcelDate(etaRaw); } catch(e) { parseErrCount++; }
+        }
+        const shipRaw = row[colIndex['回复出货日期']];
+        if (shipRaw) {
+          try { shipDate = parseExcelDate(shipRaw); } catch(e) { parseErrCount++; }
+        }
+
+        if (!trackingData[materialCode]) {
+          trackingData[materialCode] = { transits: [], prods: [] };
+        }
+
+        // In-transit: 在途数量 > 0
+        if (transitQty > 0 && etaDate) {
+          const weeks = dateToWeeks(etaDate, now);
+          trackingData[materialCode].transits.push({ qty: Math.round(transitQty), weeks });
+        }
+
+        // In-production: 未交数量 > 0（不依赖 confirmed shipDate，已下单即计入）
+        if (uncommittedQty > 0) {
+          // Determine effective transit days: tracking table > product regular method
+          let effectiveTransit = transitTimeVal;
+          if (effectiveTransit <= 0) {
+            const prodIdx = productMap[materialCode];
+            if (prodIdx !== undefined) {
+              const prod = batchProducts[prodIdx];
+              const methods = getShippingMethods();
+              const rm = methods.find(m => m.name === prod.regularMethod);
+              if (rm) effectiveTransit = rm.leadDomDays || 0;
+            }
+          }
+          if (effectiveTransit <= 0) effectiveTransit = 35; // last-resort default
+
+          let weeks;
+          if (shipDate) {
+            // Confirmed ship date: arrivalDate = shipDate + transit
+            const arrivalDate = new Date(shipDate.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
+            weeks = dateToWeeks(arrivalDate, now);
+          } else {
+            // No confirmed ship date: estimate arrival = now + transit (conservative)
+            // 已下单但交期未确认，按常规运输时效估算
+            const defaultArrival = new Date(now.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
+            weeks = dateToWeeks(defaultArrival, now);
+          }
+          trackingData[materialCode].prods.push({ qty: Math.round(uncommittedQty), weeks });
+        }
+      }
+
+      // Apply tracking data to matched products
+      let matchedCount = 0;
+      let unmatchedCount = 0;
+      const matchedMaterials = [];
+      const unmatchedMaterials = [];
+
+      for (const [matCode, data] of Object.entries(trackingData)) {
+        if (productMap.hasOwnProperty(matCode)) {
+          const idx = productMap[matCode];
+          const product = batchProducts[idx];
+
+          // Build transit batch strings
+          if (data.transits.length > 0) {
+            product.domInTransit = data.transits.map(t => t.qty).join(',');
+            product.domInTransitWeeks = data.transits.map(t => t.weeks).join(',');
+          }
+
+          // Build production batch strings
+          if (data.prods.length > 0) {
+            product.domInProd = data.prods.map(t => t.qty).join(',');
+            product.domInProdWeeks = data.prods.map(t => t.weeks).join(',');
+          }
+
+          matchedCount++;
+          matchedMaterials.push(matCode);
+        } else {
+          unmatchedCount++;
+          unmatchedMaterials.push(matCode);
+        }
+      }
+
+      // Refresh product list display
+      renderBatchProductList();
+
+      // Show result toast
+      let msg = `✅ 采购跟踪表导入完成！\n\n匹配成功：${matchedCount} 个产品`;
+      if (unmatchedCount > 0) {
+        msg += `\n未匹配：${unmatchedCount} 个物料编码（跟踪表中有但产品列表中没有）`;
+        const sample = unmatchedMaterials.slice(0, 5);
+        msg += `\n示例：${sample.join(', ')}${unmatchedMaterials.length > 5 ? '...' : ''}`;
+      }
+      alert(msg);
+
+    } catch(err) {
+      alert('采购跟踪表解析失败: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+// Parse Excel date value (handles both datetime objects and serial numbers)
+function parseExcelDate(val) {
+  if (val instanceof Date) return val;
+  if (typeof val === 'number') {
+    // Excel serial date (days since 1900-01-01 with the known 2-day offset)
+    return new Date(Math.round((val - 25569) * 86400 * 1000));
+  }
+  // Try string parsing
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) return d;
+  throw new Error('Unable to parse date: ' + val);
+}
+
+// Convert date to weeks from now (minimum 0)
+function dateToWeeks(targetDate, nowDate) {
+  const diffMs = targetDate.getTime() - nowDate.getTime();
+  const weeks = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000));
+  return Math.max(0, weeks);
+}
+
 function renderBatchProductList(productsToRender) {
   const products = productsToRender || batchProducts;
   document.getElementById('batchProductCount').textContent = '共 ' + batchProducts.length + ' 个产品';
@@ -3607,7 +3945,7 @@ function renderBatchProductList(productsToRender) {
       <td>${escHtml(p.colorSet || '--')}</td>
       <td><span class="tier-badge tier-${p.priorityTier || '99'}">${p.priorityTier || '--'}</span></td>
       <td>${p.fbaStock || '--'}</td>
-      <td>${p.fcM0 || '--'}</td>
+      <td>${fmtMonthlyAvg(p) || '--'}</td>
       <td>${p.domInTransit || '--'}</td>
       <td>${p.osInTransit || '--'}</td>
       <td>${p.divertStock || '--'}</td>
@@ -3772,6 +4110,12 @@ function renderBatchSummary(resultsToRender) {
     const tier = r.product.priorityTier || '--';
     const tierLabel = `<span class="tier-badge tier-${tier === '--' ? '' : tier}">${tier}</span>`;
 
+    // Domestic in-transit / in-production total quantities
+    const domTransitVals = (r.product.domInTransit || '').split(',').map(v => parseInt(v) || 0);
+    const domProdVals = (r.product.domInProd || '').split(',').map(v => parseInt(v) || 0);
+    const totalDomTransit = domTransitVals.reduce((a,b) => a + b, 0);
+    const totalDomProd = domProdVals.reduce((a,b) => a + b, 0);
+
     html += `<tr class="batch-summary-row" onclick="toggleBatchDetail(${idx})" style="cursor:pointer;">
       <td>${idx + 1}</td>
       <td>${escHtml(r.product.categoryLevel3 || '--')}</td>
@@ -3779,6 +4123,8 @@ function renderBatchSummary(resultsToRender) {
       <td><strong>${escHtml(r.product.materialName || '--')}</strong></td>
       <td>${escHtml(r.product.specCode || '--')}</td>
       <td>${tierLabel}</td>
+      <td>${totalDomTransit > 0 ? fmt(totalDomTransit) : '--'}</td>
+      <td>${totalDomProd > 0 ? fmt(totalDomProd) : '--'}</td>
       <td>${fmt(totalDemand)}</td>
       <td><strong>${fmt(totalReplen)}</strong></td>
       <td>${capAdjLabel}</td>
@@ -3819,7 +4165,7 @@ function renderBatchSummary(resultsToRender) {
   let footHtml = '';
   if (cCount > 0) {
     footHtml += `<tr style="background:#e8f0fe;font-weight:600;border-top:2px solid var(--primary);">
-      <td colspan="4">🚢 整柜出运小计 (${cCount}个)</td>
+      <td colspan="6">🚢 整柜出运小计 (${cCount}个)</td>
       <td></td>
       <td></td>
       <td>${fmt(cDemand)}</td>
@@ -3833,7 +4179,7 @@ function renderBatchSummary(resultsToRender) {
   }
   if (rCount > 0) {
     footHtml += `<tr style="background:#fef9e7;font-weight:600;${cCount>0?'':'border-top:2px solid var(--primary);'}">
-      <td colspan="4">📦 散货出运小计 (${rCount}个)</td>
+      <td colspan="6">📦 散货出运小计 (${rCount}个)</td>
       <td></td>
       <td></td>
       <td>${fmt(rDemand)}</td>
@@ -3847,7 +4193,7 @@ function renderBatchSummary(resultsToRender) {
   }
   if (cCount > 0 || rCount > 0) {
     footHtml += `<tr style="background:#f0f0f0;font-weight:700;font-size:13px;">
-      <td colspan="4">📊 全部合计</td>
+      <td colspan="6">📊 全部合计</td>
       <td></td>
       <td></td>
       <td>${fmt(cDemand + rDemand)}</td>
@@ -4489,21 +4835,25 @@ function renderBatchDetail(idx) {
   let planHtml = '';
   const hasCapacityConstraint = !!plan.capacityInfo;
   const shipMethodOptions = getShippingMethods().map(m => '<option value="'+escHtml(m.name)+'">'+escHtml(m.name)+'</option>').join('');
-  plan.weeklyPlan.forEach(p => {
-    const statusClass = p.stockout > 0 ? 'cell-danger' : (p.endingInv < plan.safetyStock ? 'cell-warn' : 'cell-ok');
+  plan.weeklyPlan.forEach((p, idx) => {
+    const weekSafety = (plan.weeklySafetyStock || [])[idx] != null ? plan.weeklySafetyStock[idx] : plan.safetyStock;
+    const statusClass = p.stockout > 0 ? 'cell-danger' : (p.endingInv < weekSafety ? 'cell-warn' : 'cell-ok');
     const recClass = p.recommendedQty > 0 ? 'cell-plan' : '';
     const allocClass = p.allocatedQty > 0 ? 'cell-plan' : '';
     const stockoutQtyClass = p.stockout > 0 ? 'cell-danger' : '';
     const arrivalId = 'arrival_' + p.week;
     const orderId = 'order_' + p.week;
     const isSupply = currentMode === 'supply';
-    const isLowStock = p.endingInv < plan.safetyStock && p.stockout === 0;
+    const isLowStock = p.endingInv < weekSafety && p.stockout === 0;
 
     planHtml += `<tr>
       <td><strong>第${p.week}周</strong></td>
       <td style="font-size:11px;color:var(--text-muted)">${p.dateRange}</td>
       <td>${fmt(p.beginInv)}</td>
       <td>${p.arrival > 0 ? '<strong>'+fmt(p.arrival)+'</strong>' : '--'}</td>
+      <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalOsAll||0) > 0 ? fmt(p.arrivalOsAll) : '--'}</td>
+      <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalDomTransit||0) > 0 ? fmt(p.arrivalDomTransit) : '--'}</td>
+      <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalDomProd||0) > 0 ? fmt(p.arrivalDomProd) : '--'}</td>
       <td><strong>${fmt(p.demand)}</strong></td>
       <td>${fmt(p.actualSales)}</td>
       <td class="${stockoutQtyClass}">${p.stockout > 0 ? '<strong>'+fmt(p.stockout)+'</strong>' : '--'}</td>
@@ -4609,9 +4959,18 @@ function renderBatchDetail(idx) {
 
       <h4 style="margin-bottom:8px;">出货与补货计划 <span style="font-weight:normal;font-size:12px;color:var(--text-muted);">（点击数量单元格可编辑调整${plan.containerInfo && plan.containerInfo.adjusted ? '，输入后自动按整柜取整' : ''}）</span></h4>
       <div class="result-table-wrap" style="max-height:500px;">
-        <table class="result-table" style="min-width:1700px;">
+        <table class="result-table" style="min-width:2000px;">
+          <colgroup>
+            <col><col><col><col>
+            <col class="arrival-detail-col"><col class="arrival-detail-col"><col class="arrival-detail-col">
+            <col><col><col><col><col><col><col><col><col><col><col><col>
+          </colgroup>
           <thead><tr>
-            <th>周次</th><th>日期范围</th><th>期初可售</th><th>本周到货</th><th>本周需求</th><th>实际周销量</th><th>预计断货数量</th><th>预计断货时间点</th><th>期末库存</th><th>建议下单量</th>${hasCapacityConstraint ? '<th>产能分配后下单数</th>' : ''}<th>预计到仓时间</th><th>下单到仓天数</th><th>建议下单时间</th><th>建议出货时间</th><th>运输方式</th><th>运输成本</th><th>状态</th>
+            <th>周次</th><th>日期范围</th><th>期初可售</th>            <th>本周到货 <button class="arrival-toggle-btn arrival-batch-toggle" onclick="toggleArrivalDetailBatch()" title="展开/折叠到货明细"></button></th>
+            <th class="arrival-detail-col arrival-detail-header">海外仓到货</th>
+            <th class="arrival-detail-col arrival-detail-header">国内在途到仓</th>
+            <th class="arrival-detail-col arrival-detail-header">国内在制到仓</th>
+            <th>本周需求</th><th>实际周销量</th><th>预计断货数量</th><th>预计断货时间点</th><th>期末库存</th><th>建议下单量</th>${hasCapacityConstraint ? '<th>产能分配后下单数</th>' : ''}<th>预计到仓时间</th><th>下单到仓天数</th><th>建议下单时间</th><th>建议出货时间</th><th>运输方式</th><th>运输成本</th><th>状态</th>
           </tr></thead>
           <tbody>${planHtml}</tbody>
         </table>
@@ -5521,8 +5880,9 @@ function renderPlanTableData(plan) {
   const shipMethodOptions = shipMethods.map(m => '<option value="'+escHtml(m.name)+'">'+escHtml(m.name)+'</option>').join('');
 
   let tbodyHtml = '';
-  plan.weeklyPlan.forEach(p => {
-    const statusClass = p.stockout > 0 ? 'cell-danger' : (p.endingInv < plan.safetyStock ? 'cell-warn' : 'cell-ok');
+  plan.weeklyPlan.forEach((p, idx) => {
+    const weekSafety = (plan.weeklySafetyStock || [])[idx] != null ? plan.weeklySafetyStock[idx] : plan.safetyStock;
+    const statusClass = p.stockout > 0 ? 'cell-danger' : (p.endingInv < weekSafety ? 'cell-warn' : 'cell-ok');
     // recommendedQty = sum(originalAmount) from ALL replenishments at this week.
     // It IS the demand-based unconstrained reference because originalAmount is
     // recorded BEFORE supply capping.  rawRecommendedQty is a single-shot backup
@@ -5533,7 +5893,7 @@ function renderPlanTableData(plan) {
     const isSupply = currentMode === 'supply';
     const displayRecQty = p.recommendedQty || p.rawRecommendedQty || 0;
     // ALL rows are editable — always show inputs
-    const isLowStock = p.endingInv < plan.safetyStock && p.stockout === 0;
+    const isLowStock = p.endingInv < weekSafety && p.stockout === 0;
     const recClass = 'cell-plan';
     const arrivalId = 'arrival_' + p.week;
     const orderId = 'order_' + p.week;
@@ -5545,6 +5905,9 @@ function renderPlanTableData(plan) {
         <td style="font-size:11px;color:var(--text-muted)">${p.dateRange}</td>
         <td>${fmt(p.beginInv)}</td>
         <td>${p.arrival > 0 ? '<strong>'+fmt(p.arrival)+'</strong>' : '--'}</td>
+        <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalOsAll||0) > 0 ? fmt(p.arrivalOsAll) : '--'}</td>
+        <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalDomTransit||0) > 0 ? fmt(p.arrivalDomTransit) : '--'}</td>
+        <td class="arrival-detail-cell arrival-detail-col">${(p.arrivalDomProd||0) > 0 ? fmt(p.arrivalDomProd) : '--'}</td>
         <td><strong>${fmt(p.demand)}</strong></td>
         <td>${fmt(p.actualSales)}</td>
         <td class="${stockoutQtyClass}">${p.stockout > 0 ? '<strong>'+fmt(p.stockout)+'</strong>' : '--'}</td>
@@ -6011,7 +6374,7 @@ function renderCharts(plan) {
       labels,
       datasets: [
         { label: '期末库存', data: invData, borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,0.08)', fill: true, tension: 0.3, pointRadius: 3 },
-        { label: '安全库存线', data: Array(weeks).fill(plan.safetyStock), borderColor: '#e37400', borderDash: [5,5], fill: false, pointRadius: 0 },
+        { label: '安全库存线', data: plan.weeklySafetyStock || Array(weeks).fill(plan.safetyStock), borderColor: '#e37400', borderDash: [5,5], fill: false, pointRadius: 0 },
       ]
     },
     options: {
@@ -6080,7 +6443,7 @@ function renderBatchCharts(plan, idx) {
       labels,
       datasets: [
         { label: '期末库存', data: invData, borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,0.08)', fill: true, tension: 0.3, pointRadius: 3 },
-        { label: '安全库存线', data: Array(weeks).fill(plan.safetyStock), borderColor: '#e37400', borderDash: [5,5], fill: false, pointRadius: 0 },
+        { label: '安全库存线', data: plan.weeklySafetyStock || Array(weeks).fill(plan.safetyStock), borderColor: '#e37400', borderDash: [5,5], fill: false, pointRadius: 0 },
       ]
     },
     options: {
@@ -6356,8 +6719,9 @@ function exportBatchAsPDF() {
       : '';
 
     let planRows = '';
-    plan.weeklyPlan.forEach(p => {
-      const sc = p.stockout > 0 ? 'background:#ffe0e0;' : (p.endingInv < plan.safetyStock ? 'background:#fff3cd;' : '');
+    plan.weeklyPlan.forEach((p, idx) => {
+      const weekSafety = (plan.weeklySafetyStock || [])[idx] != null ? plan.weeklySafetyStock[idx] : plan.safetyStock;
+      const sc = p.stockout > 0 ? 'background:#ffe0e0;' : (p.endingInv < weekSafety ? 'background:#fff3cd;' : '');
       planRows += `<tr style="${sc}">
         <td style="border:1px solid #ddd;padding:3px 5px;font-size:11px;">第${p.week}周</td>
         <td style="border:1px solid #ddd;padding:3px 5px;font-size:10px;color:#888;">${p.dateRange}</td>
@@ -6375,7 +6739,7 @@ function exportBatchAsPDF() {
         <td style="border:1px solid #ddd;padding:3px 5px;font-size:10px;color:#888;">${p.shipDate || '--'}</td>
         <td style="border:1px solid #ddd;padding:3px 5px;font-size:10px;">${p.method || '--'}</td>
         <td style="border:1px solid #ddd;padding:3px 5px;font-size:11px;text-align:right;">${p.cost > 0 ? fmtMoney(p.cost) : '--'}</td>
-        <td style="border:1px solid #ddd;padding:3px 5px;font-size:10px;text-align:center;">${p.stockout > 0 ? '缺货' : (p.endingInv < plan.safetyStock ? '低库存' : '正常')}</td>
+        <td style="border:1px solid #ddd;padding:3px 5px;font-size:10px;text-align:center;">${p.stockout > 0 ? '缺货' : (p.endingInv < weekSafety ? '低库存' : '正常')}</td>
       </tr>`;
     });
 
@@ -6519,6 +6883,30 @@ function toggleFullscreen() {
   } else {
     document.documentElement.requestFullscreen();
   }
+}
+
+// Toggle arrival detail columns (海外仓到货 / 国内在途到仓 / 国内在制到仓)
+let arrivalDetailExpanded = true;
+function toggleArrivalDetail() {
+  arrivalDetailExpanded = !arrivalDetailExpanded;
+  const cols = document.querySelectorAll('#planTable .arrival-detail-col');
+  const headers = document.querySelectorAll('#planTable thead th.arrival-detail-col');
+  const btn = document.getElementById('arrivalToggleBtn');
+  cols.forEach(c => c.classList.toggle('collapsed', !arrivalDetailExpanded));
+  headers.forEach(h => h.classList.toggle('arrival-detail-header', arrivalDetailExpanded));
+  if (btn) btn.classList.toggle('collapsed', !arrivalDetailExpanded);
+}
+let arrivalDetailExpandedBatch = true;
+function toggleArrivalDetailBatch() {
+  arrivalDetailExpandedBatch = !arrivalDetailExpandedBatch;
+  const container = document.getElementById('batchDetailContainer');
+  if (!container) return;
+  const cols = container.querySelectorAll('.arrival-detail-col');
+  const headers = container.querySelectorAll('thead th.arrival-detail-col');
+  const btn = container.querySelector('.arrival-batch-toggle');
+  cols.forEach(c => c.classList.toggle('collapsed', !arrivalDetailExpandedBatch));
+  headers.forEach(h => h.classList.toggle('arrival-detail-header', arrivalDetailExpandedBatch));
+  if (btn) btn.classList.toggle('collapsed', !arrivalDetailExpandedBatch);
 }
 
 // Listen for fullscreen change to add/remove class
