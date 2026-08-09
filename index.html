@@ -831,7 +831,7 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
       <span id="batchProductFilterCount" style="font-size:12px;color:var(--text-muted);margin-left:auto;"></span>
     </div>
     <div class="result-table-wrap" style="max-height:400px;">
-      <table class="result-table" id="batchProductTable" style="min-width:1100px;">
+      <table class="result-table" id="batchProductTable" style="min-width:1300px;">
         <thead>
           <tr>
             <th>#</th>
@@ -848,6 +848,8 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
             <th>挪用库存</th>
             <th>国内在制</th>
             <th>单箱体积(m³)</th>
+            <th>规划周期</th>
+            <th>生产周期</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -1696,6 +1698,9 @@ const IMPORT_FIELDS = [
   { id: 'domInTransitWeeks',  cn: '国内在途到仓周数', example: '5,8' },
   { id: 'domInProd',          cn: '国内在制',       example: '400,300,300' },
   { id: 'domInProdWeeks',     cn: '国内在制完成周数', example: '6,8,10' },
+  // 供应参数（可选，不填则使用供应参数设定的默认值）
+  { id: 'planningWeeks',       cn: '规划周期（周）【可选】', example: '' },
+  { id: 'productionCycleDays', cn: '供应商生产周期（天）【可选】', example: '' },
 ];
 
 // Reverse lookup: Chinese header → field id
@@ -1709,6 +1714,7 @@ const EXPORT_FIELDS = [
   'currentWeekSales','last4WeeksSales','actualWeeklySales',
   'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks',
   'divertStock','divertStockWeeks','domInTransit','domInTransitWeeks','domInProd','domInProdWeeks',
+  'planningWeeks','productionCycleDays',
   'productionCycleDays','shelvingDays','safetyWeeks','planningWeeks',
 ];
 
@@ -1775,6 +1781,8 @@ function downloadTemplate() {
     domInTransitWeeks: '【可选填】多批次填写格式：各批次的到仓周数用逗号分隔，如"5,8"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
     domInProd: '【可选填】多批次填写格式：各批次数量用逗号分隔，如"400,300,300"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
     domInProdWeeks: '【可选填】多批次填写格式：各批次完成生产周数用逗号分隔，如"6,8,10"。留空则可后续通过"导入采购跟踪表"按钮自动填充',
+    planningWeeks: '【可选填】产品级规划周期（周），如填24。不填则使用供应参数设定的默认值',
+    productionCycleDays: '【可选填】产品级供应商生产周期（天），如填45。不填则使用供应参数设定的默认值',
   };
   IMPORT_FIELDS.forEach((f, i) => { if (notes[f.id]) addNote(ws, i, notes[f.id]); });
   const wb = XLSX.utils.book_new();
@@ -3671,6 +3679,15 @@ function calculatePlanForRow(rowData) {
     });
   }
 
+  // Product-level override: row-level planningWeeks / productionCycleDays take top priority
+  // Priority: 导入模板填写的值 > 供应参数设置 > 页面通用默认值
+  ['planningWeeks', 'productionCycleDays'].forEach(id => {
+    if (rowData[id] !== undefined && String(rowData[id]).trim() !== '') {
+      const el = document.getElementById(id);
+      if (el) el.value = rowData[id];
+    }
+  });
+
   // Run calculation
   const plan = calculatePlan();
 
@@ -3956,10 +3973,12 @@ function renderBatchProductList(productsToRender) {
       <td>${p.divertStock || '--'}</td>
       <td>${p.domInProd || '--'}</td>
       <td>${p.productVolume || '--'}</td>
+      <td>${p.planningWeeks || '--'}</td>
+      <td>${p.productionCycleDays || '--'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="removeBatchProduct(${originalIdx})">删除</button></td>
     </tr>`;
   });
-  tbody.innerHTML = html || '<tr><td colspan="15" style="color:var(--text-muted);padding:16px;">暂无产品</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="17" style="color:var(--text-muted);padding:16px;">暂无产品</td></tr>';
 }
 
 function updateBatchProductFilterOptions() {
