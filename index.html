@@ -478,6 +478,11 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
       <span class="hint">建议下单量按整箱取整</span>
     </div>
     <div class="form-group">
+      <label>单套重量（KG）</label>
+      <input type="number" id="productWeight" placeholder="例如：0.5" value="0.5" min="0" step="0.001">
+      <span class="hint">用于运费计算（下单数量×单套重量×单位运费）</span>
+    </div>
+    <div class="form-group">
       <label>常规运输方式</label>
       <input type="text" id="regularMethod" placeholder="例如：海运35" value="海运35">
       <span class="hint">用于对比其他运输方式的成本差异</span>
@@ -698,7 +703,7 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
     <thead>
       <tr>
         <th style="width:18%">运输方式</th>
-        <th style="width:18%">单位运费 (¥/套)</th>
+        <th style="width:18%">单位运费 (¥/KG)</th>
         <th style="width:18%">海外仓到 FBA 时效（天）</th>
         <th style="width:18%">国内到FBA仓时效（天）</th>
         <th style="width:14%">最小批次量</th>
@@ -848,6 +853,7 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
             <th>挪用库存</th>
             <th>国内在制</th>
             <th>单箱体积(m³)</th>
+            <th>单套重量(KG)</th>
             <th>规划周期</th>
             <th>生产周期</th>
             <th>操作</th>
@@ -1070,7 +1076,7 @@ body.fullscreen-active .chart-box canvas { max-height: 400px; }
           <thead>
             <tr>
               <th>运输方式</th>
-              <th>单价 (¥/套)</th>
+              <th>单价 (¥/KG)</th>
               <th>下单数量</th>
               <th>总成本</th>
               <th>vs 常规运输成本差异</th>
@@ -1495,7 +1501,7 @@ function applySupplierCapacityConstraints(batchResults) {
         a.plan.replenishments.forEach(r => {
           if (r.originalAmount === undefined) r.originalAmount = r.amount;
           r.amount = a.truncated ? Math.max(0, Math.floor(r.originalAmount * scale)) : r.originalAmount;
-          r.cost = r.amount * r.method.costPerUnit;
+          r.cost = r.amount * getProductWeight() * r.method.costPerUnit;
           scaledTotal += r.amount;
         });
 
@@ -1675,6 +1681,7 @@ const IMPORT_FIELDS = [
   { id: 'productUnit',        cn: '产品单位',       example: '箱' },
   { id: 'casesPerUnit',       cn: '单箱数量(套)',   example: '24' },
   { id: 'productVolume',      cn: '单箱体积(m³)',   example: '0.05' },
+  { id: 'productWeight',      cn: '单套重量(KG)',   example: '0.5' },
   { id: 'regularMethod',      cn: '常规运输方式',   example: '海运35' },
   { id: 'priorityTier',       cn: '优保梯队列',     example: '1' },
   // 销量与预测
@@ -1709,7 +1716,7 @@ IMPORT_FIELDS.forEach(f => { CN_TO_ID[f.cn] = f.id; });
 // Full export fields (for JSON export only, unchanged)
 const EXPORT_FIELDS = [
   'materialCode','materialName','specCode','category','categoryLevel3','colorSet','brand','region','site','destWarehouse',
-  'productUnit','casesPerUnit','regularMethod',
+  'productUnit','casesPerUnit','productWeight','regularMethod',
   'currentWeekSales','last4WeeksSales','actualWeeklySales',
   'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks',
   'divertStock','divertStockWeeks','domInTransit','domInTransitWeeks','domInProd','domInProdWeeks',
@@ -2296,6 +2303,7 @@ function fmtMonthlyAvg(p) {
 function fmtWeeks(n) { return (Number(n) % 1 === 0) ? fmt(n) + ' 周' : Number(n).toFixed(1) + ' 周'; }
 function getVal(id) { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? 0 : v; }
 function getStr(id) { return (document.getElementById(id)?.value || '').trim(); }
+function getProductWeight() { return Math.max(0.001, getVal('productWeight') || 0.001); }
 
 function getWeekDateRange(weekIndex) {
   const now = new Date();
@@ -2925,7 +2933,7 @@ function calculatePlan() {
         amount: effectiveQty,
         originalAmount: subOriginalQty,
         method: subMethod,
-        cost: effectiveQty * subMethod.costPerUnit
+        cost: effectiveQty * getProductWeight() * subMethod.costPerUnit
       });
 
       // Record rawRecommendedQty (demand-based, unconstrained) for EVERY sub-batch.
@@ -3154,7 +3162,7 @@ function calculatePlan() {
 
 function saveFormState() {
   const fields = ['materialName','specCode','category','categoryLevel3','colorSet','brand','region','site','destWarehouse',
-    'productUnit','casesPerUnit','productVolume','regularMethod',
+    'productUnit','casesPerUnit','productWeight','productVolume','regularMethod',
     'currentWeekSales','last4WeeksSales','actualWeeklySales','forecastStartMonth',
     'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks',
     'divertStock','divertStockWeeks',
@@ -3494,7 +3502,7 @@ function applyContainerAdjustment(plan, productVolume) {
           arriveWeek: arriveWeek,
           amount: unitsPerContainer,
           method: seaByCost[0],
-          cost: unitsPerContainer * seaByCost[0].costPerUnit,
+          cost: unitsPerContainer * getProductWeight() * seaByCost[0].costPerUnit,
           containers: 1,
           unitsPerContainer,
           containerCost: cfg.cost,
@@ -3518,7 +3526,7 @@ function applyContainerAdjustment(plan, productVolume) {
         arriveWeek: lastArriveWeek,
         amount: unitsPerContainer,
         method: seaByCost[0],
-        cost: unitsPerContainer * seaByCost[0].costPerUnit,
+        cost: unitsPerContainer * getProductWeight() * seaByCost[0].costPerUnit,
         containers: 1,
         unitsPerContainer,
         containerCost: cfg.cost,
@@ -3553,7 +3561,7 @@ function applyContainerAdjustment(plan, productVolume) {
       r.arriveWeek = Math.max(r.arriveWeek, r.orderWeek + leadWeeks - 1);
     }
     r.method = picked;
-    r.cost = r.amount * picked.costPerUnit;
+    r.cost = r.amount * getProductWeight() * picked.costPerUnit;
   });
 
   // Re-sort by arriveWeek after potential push
@@ -3643,7 +3651,7 @@ function calculatePlanForRow(rowData) {
 
   // Override product-specific fields from row data
   const fields = ['materialName','specCode','category','categoryLevel3','colorSet','brand','region','site','destWarehouse',
-    'productUnit','casesPerUnit','productVolume','regularMethod',
+    'productUnit','casesPerUnit','productWeight','productVolume','regularMethod',
     'currentWeekSales','last4WeeksSales','actualWeeklySales',
     'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks',
     'divertStock','divertStockWeeks'];
@@ -3972,12 +3980,13 @@ function renderBatchProductList(productsToRender) {
       <td>${p.divertStock || '--'}</td>
       <td>${p.domInProd || '--'}</td>
       <td>${p.productVolume || '--'}</td>
+      <td>${p.productWeight || '--'}</td>
       <td>${p.planningWeeks || '--'}</td>
       <td>${p.productionCycleDays || '--'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="removeBatchProduct(${originalIdx})">删除</button></td>
     </tr>`;
   });
-  tbody.innerHTML = html || '<tr><td colspan="17" style="color:var(--text-muted);padding:16px;">暂无产品</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="18" style="color:var(--text-muted);padding:16px;">暂无产品</td></tr>';
 }
 
 function updateBatchProductFilterOptions() {
@@ -4472,7 +4481,7 @@ function renderBatchCostSummary() {
   if (methodNames.length > 0) {
     methodNames.sort().forEach(mn => {
       const mg = methodGroups[mn];
-      const regCost = mg.qty * (regMethod ? regMethod.costPerUnit : 0);
+      const regCost = mg.qty * getProductWeight() * (regMethod ? regMethod.costPerUnit : 0);
       const diff = mg.cost - regCost;
       const diffSign = diff > 0 ? '+' : '';
       const diffClass = diff > 0 ? 'cell-danger' : 'cell-ok';
@@ -4500,7 +4509,7 @@ function renderBatchCostSummary() {
           <thead>
             <tr>
               <th>运输方式</th>
-              <th>单价 (¥/套)</th>
+              <th>单价 (¥/KG)</th>
               <th>下单数量</th>
               <th>总成本</th>
               <th>vs 常规运输成本差异</th>
@@ -4516,8 +4525,8 @@ function renderBatchCostSummary() {
     </table>
     <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">
       ${regMethodName
-        ? '* 常规运输基准：<strong>' + escHtml(regMethodName) + '</strong>（单价 ' + fmtMoney(regMethod.costPerUnit) + '/套）'
-        : '* 常规运输基准：<strong>' + escHtml(regMethod ? regMethod.name : '--') + '</strong>（单价 ' + fmtMoney(regMethod ? regMethod.costPerUnit : 0) + '/套，优先级最高）'}
+        ? '* 常规运输基准：<strong>' + escHtml(regMethodName) + '</strong>（单价 ' + fmtMoney(regMethod.costPerUnit) + '/KG）'
+        : '* 常规运输基准：<strong>' + escHtml(regMethod ? regMethod.name : '--') + '</strong>（单价 ' + fmtMoney(regMethod ? regMethod.costPerUnit : 0) + '/KG，优先级最高）'}
     </div>`;
 
   card.style.display = (methodNames.length > 0 || totalShipCost > 0) ? '' : 'none';
@@ -5085,9 +5094,9 @@ function updateRecQtyBatch(weekNum, newQty) {
         const containers = Math.max(1, Math.round(qty / upc));
         entry.cost = containers * cfg.cost;
       } else if (method) {
-        entry.cost = qty * method.costPerUnit;
+        entry.cost = qty * getProductWeight() * method.costPerUnit;
       }
-    } else if (method) { entry.cost = qty * method.costPerUnit; }
+    } else if (method) { entry.cost = qty * getProductWeight() * method.costPerUnit; }
   } else { entry.cost = 0; }
 
   // Sync replenishments: amount and originalAmount both become the new qty (reset allocation)
@@ -5107,7 +5116,7 @@ function updateRecQtyBatch(weekNum, newQty) {
               const cnt = Math.max(1, Math.round(r.amount / upc));
               return cnt * cfg.cost;
             })()
-          : r.amount * r.method.costPerUnit;
+          : r.amount * getProductWeight() * r.method.costPerUnit;
       });
       const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
       const diff = qty - totalDistributed;
@@ -5121,7 +5130,7 @@ function updateRecQtyBatch(weekNum, newQty) {
           const cnt = Math.max(1, Math.round(reps[reps.length - 1].amount / upc));
           reps[reps.length - 1].cost = cnt * cfg.cost;
         } else {
-          reps[reps.length - 1].cost = reps[reps.length - 1].amount * reps[reps.length - 1].method.costPerUnit;
+          reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
         }
       }
     }
@@ -5185,9 +5194,9 @@ function updateAllocatedQtyBatch(weekNum, newQty) {
         const containers = Math.max(1, Math.round(qty / upc));
         entry.cost = containers * cfg.cost;
       } else if (method) {
-        entry.cost = qty * method.costPerUnit;
+        entry.cost = qty * getProductWeight() * method.costPerUnit;
       }
-    } else if (method) { entry.cost = qty * method.costPerUnit; }
+    } else if (method) { entry.cost = qty * getProductWeight() * method.costPerUnit; }
   } else { entry.cost = 0; }
 
   // Sync replenishments.amount only (keep originalAmount as the recommendation reference)
@@ -5205,7 +5214,7 @@ function updateAllocatedQtyBatch(weekNum, newQty) {
               const cnt = Math.max(1, Math.round(r.amount / upc));
               return cnt * cfg.cost;
             })()
-          : r.amount * r.method.costPerUnit;
+          : r.amount * getProductWeight() * r.method.costPerUnit;
       });
       const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
       const diff = qty - totalDistributed;
@@ -5218,7 +5227,7 @@ function updateAllocatedQtyBatch(weekNum, newQty) {
           const cnt = Math.max(1, Math.round(reps[reps.length - 1].amount / upc));
           reps[reps.length - 1].cost = cnt * cfg.cost;
         } else {
-          reps[reps.length - 1].cost = reps[reps.length - 1].amount * reps[reps.length - 1].method.costPerUnit;
+          reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
         }
       }
     }
@@ -5287,7 +5296,7 @@ function refreshAllFromEditsBatch() {
         const containers = Math.max(1, Math.round(allocQty / upc));
         p.cost = containers * cfg.cost;
       } else if (method) {
-        p.cost = allocQty * method.costPerUnit;
+        p.cost = allocQty * getProductWeight() * method.costPerUnit;
       }
     } else { p.cost = 0; }
     const costCell = document.getElementById('costCell_' + p.week);
@@ -5306,7 +5315,7 @@ function refreshAllFromEditsBatch() {
         if (cfg && pv > 0 && upc > 0) {
           allocQty = Math.max(1, Math.round(allocQty / upc)) * upc;
         }
-        let cost = allocQty * method.costPerUnit;
+        let cost = allocQty * getProductWeight() * method.costPerUnit;
         if (cfg && pv > 0 && upc > 0) {
           const containers = Math.max(1, Math.round(allocQty / upc));
           cost = containers * cfg.cost;
@@ -5568,7 +5577,7 @@ function autoComputeCost(weekNum) {
   if (!method) return;
   const qty = parseInt((capInput || recInput)?.value) || 0;
   if (qty <= 0) return;
-  const cost = qty * method.costPerUnit;
+  const cost = qty * getProductWeight() * method.costPerUnit;
   const costCell = document.getElementById('costCell_' + weekNum);
   if (costCell) costCell.textContent = fmtMoney(cost);
 }
@@ -5647,7 +5656,7 @@ function updateRecQty(weekNum, newQty) {
     const methodName = entry.method.split('、')[0];
     const method = methods.find(m => m.name === methodName);
     if (method) {
-      entry.cost = qty * method.costPerUnit;
+      entry.cost = qty * getProductWeight() * method.costPerUnit;
     }
   } else {
     entry.cost = 0;
@@ -5660,14 +5669,14 @@ function updateRecQty(weekNum, newQty) {
       reps.forEach(r => {
         const share = r.amount / oldQty;
         r.amount = Math.round(qty * share);
-        r.cost = r.amount * r.method.costPerUnit;
+        r.cost = r.amount * getProductWeight() * r.method.costPerUnit;
       });
       // Fix rounding: give the remainder to the last one
       const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
       const diff = qty - totalDistributed;
       if (diff !== 0 && reps.length > 0) {
         reps[reps.length - 1].amount += diff;
-        reps[reps.length - 1].cost = reps[reps.length - 1].amount * reps[reps.length - 1].method.costPerUnit;
+        reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
       }
     }
   } else if (qty > 0) {
@@ -5777,13 +5786,13 @@ function refreshAllFromEdits() {
       if (p.method && p.method !== '--') {
         const method = methods.find(m => m.name === p.method);
         if (method) {
-          p.cost = effQty * method.costPerUnit;
+          p.cost = effQty * getProductWeight() * method.costPerUnit;
         }
       } else if (isSupply && effQty > 0) {
         // In supply mode with no method selected yet, auto-pick the cheapest
         // method that can deliver within the order-to-arrival window
         p.method = methods[0].name;
-        p.cost = effQty * methods[0].costPerUnit;
+        p.cost = effQty * getProductWeight() * methods[0].costPerUnit;
       }
     });
 
@@ -5804,7 +5813,7 @@ function refreshAllFromEdits() {
         amount: effQty,
         originalAmount: isSupply ? p.recommendedQty : undefined,
         method: method,
-        cost: effQty * method.costPerUnit
+        cost: effQty * getProductWeight() * method.costPerUnit
       });
     });
 
@@ -5990,7 +5999,7 @@ function refreshCostSummary(plan) {
   let methodCostHtml = '';
   if (Object.keys(methodGroups).length > 0) {
     Object.entries(methodGroups).forEach(([mn, mg]) => {
-      const regCost = mg.qty * regMethod.costPerUnit;
+      const regCost = mg.qty * getProductWeight() * regMethod.costPerUnit;
       const diff = mg.cost - regCost;
       const diffSign = diff > 0 ? '+' : '';
       const diffClass = diff > 0 ? 'cell-danger' : 'cell-ok';
@@ -6011,8 +6020,8 @@ function refreshCostSummary(plan) {
   }
   document.getElementById('methodCostTbody').innerHTML = methodCostHtml;
   document.getElementById('costDiffNote').innerHTML = regMethodName
-    ? `* 常规运输基准：<strong>${escHtml(regMethodName)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/套）`
-    : `* 常规运输基准：<strong>${escHtml(regMethod.name)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/套，优先级最高）`;
+    ? `* 常规运输基准：<strong>${escHtml(regMethodName)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG）`
+    : `* 常规运输基准：<strong>${escHtml(regMethod.name)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG，优先级最高）`;
 
   document.getElementById('costTable').innerHTML = `
     <tr><td>🚚 运输总成本</td><td>${fmtMoney(plan.totalShipCost)}</td></tr>`;
@@ -6320,7 +6329,7 @@ function generatePlan() {
   let methodCostHtml = '';
   if (Object.keys(methodGroups).length > 0) {
     Object.entries(methodGroups).forEach(([mn, mg]) => {
-      const regCost = mg.qty * regMethod.costPerUnit;
+      const regCost = mg.qty * getProductWeight() * regMethod.costPerUnit;
       const diff = mg.cost - regCost;
       const diffSign = diff > 0 ? '+' : '';
       const diffClass = diff > 0 ? 'cell-danger' : 'cell-ok';
@@ -6341,8 +6350,8 @@ function generatePlan() {
   }
   document.getElementById('methodCostTbody').innerHTML = methodCostHtml;
   document.getElementById('costDiffNote').innerHTML = regMethodName
-    ? `* 常规运输基准：<strong>${escHtml(regMethodName)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/套）`
-    : `* 常规运输基准：<strong>${escHtml(regMethod.name)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/套，优先级最高）`;
+    ? `* 常规运输基准：<strong>${escHtml(regMethodName)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG）`
+    : `* 常规运输基准：<strong>${escHtml(regMethod.name)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG，优先级最高）`;
 
   document.getElementById('costTable').innerHTML = `
     <tr><td>🚚 运输总成本</td><td>${fmtMoney(plan.totalShipCost)}</td></tr>
@@ -6487,7 +6496,7 @@ function renderBatchCharts(plan, idx) {
 // ==================== PERSISTENCE ====================
 function saveTemplate() {
   const data = {};
-  ['materialCode','materialName','specCode','category','brand','region','productUnit','casesPerUnit','regularMethod',
+  ['materialCode','materialName','specCode','category','brand','region','productUnit','casesPerUnit','productWeight','regularMethod',
    'currentWeekSales','last4WeeksSales','actualWeeklySales','forecastMode',
    'fcM0','fcM1','fcM2','fcM3','fcM4','fcM5',
    'fbaStock','osInTransit','osInTransitWeeks','osStock','osToFbaWeeks','divertStock','divertStockWeeks',
