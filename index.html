@@ -1670,6 +1670,8 @@ const IMPORT_FIELDS = [
   { id: 'region',             cn: '区域',           example: 'US / US' },
   { id: 'site',               cn: '站点',           example: 'US-East' },
   { id: 'destWarehouse',       cn: '目的仓库',       example: 'ONT8' },
+  { id: 'planningWeeks',       cn: '规划周期（周）【可选】', example: '' },
+  { id: 'productionCycleDays', cn: '供应商生产周期（天）【可选】', example: '' },
   { id: 'productUnit',        cn: '产品单位',       example: '箱' },
   { id: 'casesPerUnit',       cn: '单箱数量(套)',   example: '24' },
   { id: 'productVolume',      cn: '单箱体积(m³)',   example: '0.05' },
@@ -1698,9 +1700,6 @@ const IMPORT_FIELDS = [
   { id: 'domInTransitWeeks',  cn: '国内在途到仓周数', example: '5,8' },
   { id: 'domInProd',          cn: '国内在制',       example: '400,300,300' },
   { id: 'domInProdWeeks',     cn: '国内在制完成周数', example: '6,8,10' },
-  // 供应参数（可选，不填则使用供应参数设定的默认值）
-  { id: 'planningWeeks',       cn: '规划周期（周）【可选】', example: '' },
-  { id: 'productionCycleDays', cn: '供应商生产周期（天）【可选】', example: '' },
 ];
 
 // Reverse lookup: Chinese header → field id
