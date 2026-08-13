@@ -5405,8 +5405,8 @@ function renderBatchDetail(idx) {
       <td class="${recClass}" style="padding:2px 4px;">
         <input type="number" id="recQty_${p.week}" value="${isSupply ? (p.rawRecommendedQty || 0) : (p.recommendedQty || 0)}" min="0" style="width:70px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateRecQtyBatch(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
       </td>
-      <td class="cell-plan" style="padding:2px 4px;text-align:center;font-weight:600;">
-        ${thisWeekQty > 0 ? '<strong>'+fmt(thisWeekQty)+'</strong>' : '--'}
+      <td class="cell-plan" style="padding:2px 4px;">
+        <input type="number" id="thisWeekQty_${p.week}" value="${thisWeekQty}" min="0" style="width:70px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateThisWeekQtyBatch(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
       </td>
       ${hasCapacityConstraint ? `<td class="${allocClass}" style="padding:2px 4px;">
         <input type="number" id="allocQty_${p.week}" value="${(p.allocatedQty || 0)}" min="0" style="width:70px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateAllocatedQtyBatch(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
@@ -5670,6 +5670,9 @@ function updateRecQtyBatch(weekNum, newQty) {
     qtyInput.value = entry.recommendedQty;
   }
 
+  // 建议下单量变化后，重置本周下单量的编辑状态并刷新输入框
+  resetThisWeekQtyEdit(plan, weekNum);
+
   // Note: recalcInventory and syncBatchSummaryFromEdit are deferred.
   // User clicks "确认修改" to apply all pending changes at once.
 }
@@ -5763,8 +5766,51 @@ function updateAllocatedQtyBatch(weekNum, newQty) {
     qtyInput.value = entry.allocatedQty;
   }
 
+  // 产能量变化后，重置本周下单量的编辑状态并刷新输入框
+  resetThisWeekQtyEdit(plan, weekNum);
+
   // Note: recalcInventory and syncBatchSummaryFromEdit are deferred.
   // User clicks "确认修改" to apply all pending changes at once.
+}
+
+// 编辑「建议本周下单量」（模式3）：覆盖该行 orderWeek===0 批次的总量，
+// 远期批次不受影响。与 updateAllocatedQtyBatch 一致，确认修改时统一生效。
+function updateThisWeekQtyBatch(weekNum, newQty) {
+  if (currentBatchPlanIdx < 0) return;
+  const plan = batchResults[currentBatchPlanIdx].plan;
+  lastGeneratedPlan = plan;
+
+  const entry = plan.weeklyPlan.find(p => p.week === weekNum);
+  if (!entry) return;
+
+  const qty = parseInt(newQty) || 0;
+  entry.thisWeekOrderQty = qty;
+  entry.twEdited = true;
+
+  // 应用到该行 orderWeek===0 的补货批次（按比例分配）
+  const reps = plan.replenishments.filter(r => r.arriveWeek === weekNum - 1 && r.orderWeek === 0);
+  if (reps.length > 0) {
+    const oldQty = reps.reduce((a, r) => a + (r.originalAmount !== undefined ? r.originalAmount : r.amount), 0);
+    reps.forEach(r => {
+      const share = oldQty > 0 ? (r.originalAmount !== undefined ? r.originalAmount : r.amount) / oldQty : 1 / reps.length;
+      r.amount = oldQty > 0 ? Math.round(qty * share) : Math.floor(qty / reps.length);
+      if (r.originalAmount !== undefined) r.originalAmount = r.amount;
+      r.cost = r.amount * getProductWeight() * r.method.costPerUnit;
+    });
+    const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
+    const diff = qty - totalDistributed;
+    if (diff !== 0) {
+      reps[reps.length - 1].amount += diff;
+      if (reps[reps.length - 1].originalAmount !== undefined) reps[reps.length - 1].originalAmount += diff;
+      reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
+    }
+  }
+
+  // 同步该行成本单元格
+  const allReps = plan.replenishments.filter(r => r.arriveWeek === weekNum - 1);
+  entry.cost = allReps.reduce((a, r) => a + r.cost, 0);
+  const costCell = document.getElementById('costCell_' + weekNum);
+  if (costCell) costCell.textContent = entry.cost > 0 ? fmtMoney(entry.cost) : '--';
 }
 
 function refreshAllFromEditsBatch() {
@@ -5790,6 +5836,11 @@ function refreshAllFromEditsBatch() {
     if (qtyInput) p.recommendedQty = parseInt(qtyInput.value) || 0;
     const allocInput = document.getElementById('allocQty_' + p.week);
     if (allocInput) p.allocatedQty = parseInt(allocInput.value) || 0;
+    // Read this-week order qty (only if user edited it)
+    const twInput = document.getElementById('thisWeekQty_' + p.week);
+    if (twInput && p.twEdited) {
+      p.thisWeekOrderQty = parseInt(twInput.value) || 0;
+    }
     const arrivalInput = document.getElementById('arrival_' + p.week);
     if (arrivalInput) p.arrivalDate = arrivalInput.value;
     const orderInput = document.getElementById('order_' + p.week);
@@ -5849,6 +5900,10 @@ function refreshAllFromEditsBatch() {
       }
     }
   });
+
+  // 2b. Apply user-edited this-week order qty to the rebuilt replenishments
+  // 仅应用用户实际编辑过的行（twEdited），避免覆盖重建后的计算值
+  applyThisWeekQtyEditsToPlan(plan);
 
   // 3. Recalculate full inventory and totals
   // Preserve manually-edited date/method fields
@@ -6205,6 +6260,9 @@ function updateRecQty(weekNum, newQty) {
   // Update cost cell inline (no full recalculation — click "确认修改" to apply)
   const costCell = document.getElementById('costCell_' + weekNum);
   if (costCell) costCell.textContent = entry.cost > 0 ? fmtMoney(entry.cost) : '--';
+
+  // 建议下单量变化后，重置本周下单量的编辑状态并刷新输入框
+  resetThisWeekQtyEdit(lastGeneratedPlan, weekNum);
 }
 
 function updateCapQty(weekNum, newQty) {
@@ -6214,6 +6272,109 @@ function updateCapQty(weekNum, newQty) {
 
   const qty = parseInt(newQty) || 0;
   entry.allocatedQty = qty;
+
+  // 产能量变化后，重置本周下单量的编辑状态并刷新输入框
+  resetThisWeekQtyEdit(lastGeneratedPlan, weekNum);
+}
+
+// 编辑「建议本周下单量」：覆盖该行（到货周=weekNum-1）中本周下单（orderWeek===0）批次的总量。
+// 远期批次（orderWeek>0）不受影响，后续仍按周滚动下单。
+function updateThisWeekQty(weekNum, newQty) {
+  if (!lastGeneratedPlan) return;
+  const entry = lastGeneratedPlan.weeklyPlan.find(p => p.week === weekNum);
+  if (!entry) return;
+
+  const qty = parseInt(newQty) || 0;
+  entry.thisWeekOrderQty = qty;
+  entry.twEdited = true;
+  applyThisWeekQtyToReps(lastGeneratedPlan, weekNum, qty);
+
+  // 同步该行成本：该行所有补货批次成本之和
+  const allReps = lastGeneratedPlan.replenishments.filter(r => r.arriveWeek === weekNum - 1);
+  entry.cost = allReps.reduce((a, r) => a + r.cost, 0);
+  const costCell = document.getElementById('costCell_' + weekNum);
+  if (costCell) costCell.textContent = entry.cost > 0 ? fmtMoney(entry.cost) : '--';
+}
+
+// 将编辑的"本周下单量"应用到指定行 orderWeek===0 的补货批次（按比例分配）
+function applyThisWeekQtyToReps(plan, weekNum, qty) {
+  const reps = plan.replenishments.filter(r => r.arriveWeek === weekNum - 1 && r.orderWeek === 0);
+  if (reps.length === 0) return;
+  const oldQty = reps.reduce((a, r) => a + (r.originalAmount !== undefined ? r.originalAmount : r.amount), 0);
+  reps.forEach(r => {
+    const share = oldQty > 0 ? (r.originalAmount !== undefined ? r.originalAmount : r.amount) / oldQty : 1 / reps.length;
+    r.amount = oldQty > 0 ? Math.round(qty * share) : Math.floor(qty / reps.length);
+    if (r.originalAmount !== undefined) r.originalAmount = r.amount;
+    r.cost = r.amount * getProductWeight() * r.method.costPerUnit;
+  });
+  const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
+  const diff = qty - totalDistributed;
+  if (diff !== 0 && reps.length > 0) {
+    reps[reps.length - 1].amount += diff;
+    if (reps[reps.length - 1].originalAmount !== undefined) reps[reps.length - 1].originalAmount += diff;
+    reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
+  }
+}
+
+// 建议下单量 / 产能量变化后，重置该行本周下单量的编辑状态，
+// 并把输入框刷新为重新计算的值（避免旧编辑值覆盖新计算结果 / 吞量）
+function resetThisWeekQtyEdit(plan, weekNum) {
+  const entry = plan.weeklyPlan.find(p => p.week === weekNum);
+  if (!entry) return;
+  delete entry.thisWeekOrderQty;
+  delete entry.twEdited;
+  const twInput = document.getElementById('thisWeekQty_' + weekNum);
+  if (twInput) {
+    const newTw = (plan.replenishments || [])
+      .filter(r => r.arriveWeek === weekNum - 1 && r.orderWeek === 0)
+      .reduce((a, r) => a + (r.originalAmount !== undefined ? r.originalAmount : r.amount), 0);
+    twInput.value = newTw;
+  }
+}
+
+// 确认修改时：将用户编辑过的"本周下单量"应用到重建后的 replenishments。
+// 仅应用实际编辑过的行（thisWeekOrderQty != null，twEdited 置位），
+// 避免覆盖重建后的计算值。模式1/2 与模式3 共用。
+function applyThisWeekQtyEditsToPlan(plan) {
+  plan.weeklyPlan.forEach(p => {
+    if (p.thisWeekOrderQty == null) return;
+    const reps = plan.replenishments.filter(r => r.arriveWeek === p.week - 1 && r.orderWeek === 0);
+    if (p.thisWeekOrderQty <= 0) {
+      // 本周不下：移除本周批次（远期批次保留，后续按周滚动）
+      if (reps.length > 0) {
+        plan.replenishments = plan.replenishments.filter(r => !(r.arriveWeek === p.week - 1 && r.orderWeek === 0));
+      }
+    } else if (reps.length > 0) {
+      const oldQty = reps.reduce((a, r) => a + (r.originalAmount !== undefined ? r.originalAmount : r.amount), 0);
+      reps.forEach(r => {
+        const share = oldQty > 0 ? (r.originalAmount !== undefined ? r.originalAmount : r.amount) / oldQty : 1 / reps.length;
+        r.amount = oldQty > 0 ? Math.round(p.thisWeekOrderQty * share) : Math.floor(p.thisWeekOrderQty / reps.length);
+        if (r.originalAmount !== undefined) r.originalAmount = r.amount;
+        r.cost = r.amount * getProductWeight() * r.method.costPerUnit;
+      });
+      const totalDistributed = reps.reduce((a, r) => a + r.amount, 0);
+      const diff = p.thisWeekOrderQty - totalDistributed;
+      if (diff !== 0) {
+        reps[reps.length - 1].amount += diff;
+        if (reps[reps.length - 1].originalAmount !== undefined) reps[reps.length - 1].originalAmount += diff;
+        reps[reps.length - 1].cost = reps[reps.length - 1].amount * getProductWeight() * reps[reps.length - 1].method.costPerUnit;
+      }
+    } else {
+      // 该行按生产周期计算没有本周批次，但用户指定了本周量 → 将最早批次提前到本周下单
+      const earliest = plan.replenishments
+        .filter(r => r.arriveWeek === p.week - 1)
+        .sort((a, b) => a.orderWeek - b.orderWeek)[0];
+      if (earliest) {
+        earliest.orderWeek = 0;
+        earliest.amount = p.thisWeekOrderQty;
+        if (earliest.originalAmount !== undefined) earliest.originalAmount = p.thisWeekOrderQty;
+        earliest.cost = earliest.amount * getProductWeight() * earliest.method.costPerUnit;
+      }
+    }
+    // 同步该行成本 = 该行所有补货批次成本之和
+    const allRepsRow = plan.replenishments.filter(r => r.arriveWeek === p.week - 1);
+    p.cost = allRepsRow.reduce((a, r) => a + r.cost, 0);
+  });
 }
 
 let planConfirmBtnHover = false;
@@ -6230,7 +6391,7 @@ function keepPlanConfirmBtn() {
 function hidePlanConfirmBtnDelayed() {
   setTimeout(() => {
     const active = document.activeElement;
-    const activeIsQty = active && active.id && active.id.startsWith('recQty_');
+    const activeIsQty = active && active.id && (active.id.startsWith('recQty_') || active.id.startsWith('thisWeekQty_') || active.id.startsWith('capQty_'));
     if (!planConfirmBtnHover && !activeIsQty) {
       const btn = document.getElementById('planConfirmBtn');
       if (btn) btn.classList.remove('visible');
@@ -6268,6 +6429,12 @@ function refreshAllFromEdits() {
         if (capInput) {
           p.allocatedQty = parseInt(capInput.value) || 0;
         }
+      }
+
+      // Read this-week order qty (only if user edited it)
+      const twInput = document.getElementById('thisWeekQty_' + p.week);
+      if (twInput && p.twEdited) {
+        p.thisWeekOrderQty = parseInt(twInput.value) || 0;
       }
 
       // Read arrival date
@@ -6334,6 +6501,10 @@ function refreshAllFromEdits() {
         cost: effQty * getProductWeight() * method.costPerUnit
       });
     });
+
+    // 2b. Apply user-edited this-week order qty to the rebuilt replenishments
+    // 仅应用用户实际编辑过的行（twEdited），避免覆盖重建后的计算值
+    applyThisWeekQtyEditsToPlan(lastGeneratedPlan);
 
     // 3. Recalculate full inventory and totals
     // Save manually-edited date fields AND custom-added rows before recalcInventory
@@ -6470,8 +6641,8 @@ function renderPlanTableData(plan) {
         <td class="${recClass}" style="padding:2px 4px;">
           <input type="number" id="recQty_${p.week}" value="${displayRecQty}" min="0" style="width:80px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateRecQty(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
         </td>
-        <td class="cell-plan" style="padding:2px 4px;text-align:center;font-weight:600;">
-          ${thisWeekQty > 0 ? '<strong>'+fmt(thisWeekQty)+'</strong>' : '--'}
+        <td class="cell-plan" style="padding:2px 4px;">
+          <input type="number" id="thisWeekQty_${p.week}" value="${thisWeekQty}" min="0" style="width:80px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateThisWeekQty(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
         </td>
         <td class="supplyCapCol recClass" style="padding:2px 4px;${!isSupply ? 'display:none;' : ''}">
           <input type="number" id="capQty_${p.week}" value="${(p.allocatedQty != null ? p.allocatedQty : displayRecQty)}" min="0" style="width:80px;font-size:12px;padding:4px 6px;border:1px solid #e37400;border-radius:4px;background:#fff8f0;" onchange="updateCapQty(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
