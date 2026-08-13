@@ -5006,6 +5006,24 @@ function renderBatchCostSummary() {
           <td class="${diffClass}">${rateSign}${diffRate.toFixed(1)}%</td>
         </tr>`;
     });
+    // 合计行：合计下单量 / 总成本 / vs 常规运输成本差异 / 汇总差异率
+    const totalQty = methodNames.reduce((a, mn) => a + methodGroups[mn].qty, 0);
+    const totalCost = methodNames.reduce((a, mn) => a + methodGroups[mn].cost, 0);
+    const totalRegCost = totalQty * getProductWeight() * (regMethod ? regMethod.costPerUnit : 0);
+    const totalDiff = totalCost - totalRegCost;
+    const totalDiffRate = totalRegCost > 0 ? (totalDiff / totalRegCost) * 100 : 0;
+    const totalDiffSign = totalDiff > 0 ? '+' : '';
+    const totalDiffClass = totalDiff > 0 ? 'cell-danger' : 'cell-ok';
+    const totalRateSign = totalDiffRate > 0 ? '+' : '';
+    methodCostHtml += `
+      <tr style="font-weight:700;background:#e8e8e8;">
+        <td><strong>合计</strong></td>
+        <td>--</td>
+        <td><strong>${fmt(totalQty)}</strong></td>
+        <td><strong>${fmtMoney(totalCost)}</strong></td>
+        <td class="${totalDiffClass}"><strong>${totalDiffSign}${fmtMoney(totalDiff)}</strong></td>
+        <td class="${totalDiffClass}"><strong>${totalRateSign}${totalDiffRate.toFixed(1)}%</strong></td>
+      </tr>`;
   } else if (costSummaryView === 'thisWeek' && hasAnyReplen) {
     methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">✅ 本周无需下单（按本周下单量口径）</td></tr>';
   } else {
@@ -6787,6 +6805,24 @@ function refreshCostSummary(plan) {
           <td class="${diffClass}">${rateSign}${diffRate.toFixed(1)}%</td>
         </tr>`;
     });
+    // 合计行：合计下单量 / 总成本 / vs 常规运输成本差异 / 汇总差异率
+    const totalQty = Object.values(methodGroups).reduce((a, mg) => a + mg.qty, 0);
+    const totalCost = Object.values(methodGroups).reduce((a, mg) => a + mg.cost, 0);
+    const totalRegCost = totalQty * getProductWeight() * regMethod.costPerUnit;
+    const totalDiff = totalCost - totalRegCost;
+    const totalDiffRate = totalRegCost > 0 ? (totalDiff / totalRegCost) * 100 : 0;
+    const totalDiffSign = totalDiff > 0 ? '+' : '';
+    const totalDiffClass = totalDiff > 0 ? 'cell-danger' : 'cell-ok';
+    const totalRateSign = totalDiffRate > 0 ? '+' : '';
+    methodCostHtml += `
+      <tr style="font-weight:700;background:#e8e8e8;">
+        <td><strong>合计</strong></td>
+        <td>--</td>
+        <td><strong>${fmt(totalQty)}</strong></td>
+        <td><strong>${fmtMoney(totalCost)}</strong></td>
+        <td class="${totalDiffClass}"><strong>${totalDiffSign}${fmtMoney(totalDiff)}</strong></td>
+        <td class="${totalDiffClass}"><strong>${totalRateSign}${totalDiffRate.toFixed(1)}%</strong></td>
+      </tr>`;
   } else if (costSummaryView === 'thisWeek') {
     methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">✅ 本周无需下单（按本周下单量口径）</td></tr>';
   } else {
