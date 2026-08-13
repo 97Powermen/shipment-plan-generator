@@ -1003,6 +1003,10 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
       <div class="card-header">
         <div class="icon">💰</div>
         <h2>成本汇总</h2>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm cost-view-btn active" data-view="recommended" onclick="switchCostSummaryView('recommended')">按建议下单量</button>
+          <button class="btn btn-outline btn-sm cost-view-btn" data-view="thisWeek" onclick="switchCostSummaryView('thisWeek')">按本周下单量</button>
+        </div>
       </div>
       <div id="batchCostSummaryContent"></div>
     </div>
@@ -1207,6 +1211,10 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
     <div class="card-header">
       <div class="icon">💰</div>
       <h2>成本汇总</h2>
+      <div style="margin-left:auto;display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm cost-view-btn active" data-view="recommended" onclick="switchCostSummaryView('recommended')">按建议下单量</button>
+        <button class="btn btn-outline btn-sm cost-view-btn" data-view="thisWeek" onclick="switchCostSummaryView('thisWeek')">按本周下单量</button>
+      </div>
     </div>
     <div style="margin-bottom:16px;">
       <h4 style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">📊 按运输方式分拆</h4>
@@ -4952,10 +4960,17 @@ function renderBatchCostSummary() {
   // Aggregate all replenishments across products by shipping method
   const methodGroups = {};
   let totalShipCost = 0;
+  let hasAnyReplen = false;
 
   batchResults.forEach(r => {
-    totalShipCost += r.plan.totalShipCost;
-    r.plan.replenishments.forEach(repl => {
+    if (!r.plan || !r.plan.replenishments || r.plan.replenishments.length === 0) return;
+    hasAnyReplen = true;
+    // 按本周下单量口径：只统计 orderWeek===0 的本周批次
+    const reps = costSummaryView === 'thisWeek'
+      ? r.plan.replenishments.filter(x => x.orderWeek === 0)
+      : r.plan.replenishments;
+    totalShipCost += reps.reduce((a, x) => a + x.cost, 0);
+    reps.forEach(repl => {
       const mn = repl.method.name;
       if (!methodGroups[mn]) {
         methodGroups[mn] = { qty: 0, cost: 0, unitCost: repl.method.costPerUnit };
@@ -4991,6 +5006,8 @@ function renderBatchCostSummary() {
           <td class="${diffClass}">${rateSign}${diffRate.toFixed(1)}%</td>
         </tr>`;
     });
+  } else if (costSummaryView === 'thisWeek' && hasAnyReplen) {
+    methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">✅ 本周无需下单（按本周下单量口径）</td></tr>';
   } else {
     methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">无需额外下单</td></tr>';
   }
@@ -5023,7 +5040,8 @@ function renderBatchCostSummary() {
         : '* 常规运输基准：<strong>' + escHtml(regMethod ? regMethod.name : '--') + '</strong>（单价 ' + fmtMoney(regMethod ? regMethod.costPerUnit : 0) + '/KG，优先级最高）'}
     </div>`;
 
-  card.style.display = (methodNames.length > 0 || totalShipCost > 0) ? '' : 'none';
+  // 有补货计划即显示卡片（本周口径无单时显示提示行，而非隐藏整卡）
+  card.style.display = hasAnyReplen ? '' : 'none';
 }
 
 function switchSummaryView(view) {
@@ -6718,12 +6736,32 @@ function renderPlanTableData(plan) {
   });
 }
 
+// 成本汇总展示口径：'recommended' 按建议下单量（全量补货批次）| 'thisWeek' 按本周下单量（仅 orderWeek=0）
+let costSummaryView = 'recommended';
+
+// 切换成本汇总口径（模式1/2 与模式3 共用按钮），切换后重渲染两处成本汇总
+function switchCostSummaryView(view) {
+  costSummaryView = view;
+  document.querySelectorAll('.cost-view-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-view') === view);
+  });
+  const cached = (typeof getCachedPlan === 'function') ? getCachedPlan() : null;
+  if (cached && document.getElementById('methodCostTbody') && cached.replenishments && cached.replenishments.length > 0) {
+    refreshCostSummary(cached);
+  }
+  if (batchResults && batchResults.length > 0) {
+    renderBatchCostSummary();
+  }
+}
+
 function refreshCostSummary(plan) {
   const regMethodName = getStr('regularMethod') || '';
   const methodsForCost = getShippingMethods();
   const regMethod = methodsForCost.find(m => m.name === regMethodName) || methodsForCost[0];
   const methodGroups = {};
   plan.replenishments.forEach(r => {
+    // 按本周下单量口径：只统计 orderWeek===0 的本周批次
+    if (costSummaryView === 'thisWeek' && r.orderWeek !== 0) return;
     const mn = r.method.name;
     if (!methodGroups[mn]) methodGroups[mn] = { qty: 0, cost: 0, unitCost: r.method.costPerUnit };
     methodGroups[mn].qty += r.amount;
@@ -6749,6 +6787,8 @@ function refreshCostSummary(plan) {
           <td class="${diffClass}">${rateSign}${diffRate.toFixed(1)}%</td>
         </tr>`;
     });
+  } else if (costSummaryView === 'thisWeek') {
+    methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">✅ 本周无需下单（按本周下单量口径）</td></tr>';
   } else {
     methodCostHtml = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">无需额外下单</td></tr>';
   }
@@ -6757,8 +6797,12 @@ function refreshCostSummary(plan) {
     ? `* 常规运输基准：<strong>${escHtml(regMethodName)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG）`
     : `* 常规运输基准：<strong>${escHtml(regMethod.name)}</strong>（单价 ${fmtMoney(regMethod.costPerUnit)}/KG，优先级最高）`;
 
+  // 运输总成本按口径统计：本周口径只累计 orderWeek===0 的批次成本
+  const totalShipCost = costSummaryView === 'thisWeek'
+    ? plan.replenishments.filter(r => r.orderWeek === 0).reduce((a, r) => a + r.cost, 0)
+    : plan.totalShipCost;
   document.getElementById('costTable').innerHTML = `
-    <tr><td>🚚 运输总成本</td><td>${fmtMoney(plan.totalShipCost)}</td></tr>`;
+    <tr><td>🚚 运输总成本</td><td>${fmtMoney(totalShipCost)}</td></tr>`;
   // end of costTable
 }
 
