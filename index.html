@@ -1031,7 +1031,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
       <div id="summaryByProduct">
         <div style="font-size:12px;color:var(--text-muted);padding:4px 0 8px;">点击行展开查看详情</div>
         <div class="result-table-wrap" style="max-height:500px;">
-          <table class="result-table" id="batchSummaryTable" style="min-width:1650px;">
+          <table class="result-table" id="batchSummaryTable" style="min-width:1760px;">
             <thead>
               <tr>
                 <th>#</th>
@@ -1044,6 +1044,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
                 <th>国内在制</th>
                 <th>总需求</th>
                 <th>建议下单</th>
+                <th>本周下单</th>
                 <th>产能分配</th>
                 <th>整柜调整</th>
                 <th>柜数</th>
@@ -1064,7 +1065,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
       <!-- View 2: By 三级颜色 -->
       <div id="summaryByLevel3" style="display:none;">
         <div class="result-table-wrap" style="max-height:500px;">
-          <table class="result-table" id="batchSummaryL3Table" style="min-width:1000px;">
+          <table class="result-table" id="batchSummaryL3Table" style="min-width:1110px;">
             <thead>
               <tr>
                 <th>#</th>
@@ -1073,6 +1074,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
                 <th>产品数</th>
                 <th>总需求</th>
                 <th>建议下单</th>
+                <th>本周下单</th>
                 <th>柜数</th>
                 <th>运输成本</th>
                 <th>缺货周数</th>
@@ -1260,7 +1262,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
         <colgroup>
           <col><col><col><col>
           <col class="arrival-detail-col"><col class="arrival-detail-col"><col class="arrival-detail-col">
-          <col><col><col><col><col><col class="supplyCapColHdr"><col><col><col><col><col><col><col><col>
+          <col><col><col><col><col><col><col class="supplyCapColHdr"><col><col><col><col><col><col><col><col><col>
         </colgroup>
         <thead>
           <tr>
@@ -1277,6 +1279,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
             <th>预计断货时间点</th>
             <th>期末库存</th>
             <th>建议下单量</th>
+            <th>建议本周下单量</th>
             <th class="supplyCapColHdr" style="display:none;">可供下单量</th>
             <th>预计到仓时间</th>
             <th>下单到仓天数</th>
@@ -1288,7 +1291,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
             <th style="width:60px;">操作</th>
           </tr>
         </thead>
-        <tbody id="planTbody"><tr><td colspan="20" style="text-align:center;color:var(--text-muted);padding:20px;">请先生成出货方案</td></tr></tbody>
+        <tbody id="planTbody"><tr><td colspan="23" style="text-align:center;color:var(--text-muted);padding:20px;">请先生成出货方案</td></tr></tbody>
       </table>
     </div>
     <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
@@ -1316,7 +1319,7 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
   <div class="card" id="orderTableCard" style="display:none;">
     <div class="card-header">
       <div class="icon">📝</div>
-      <h2>补货下单表</h2>
+      <h2>补货下单表 <span style="font-weight:normal;font-size:12px;color:var(--text-muted);">（仅本周需下的单，远期订单按周滚动）</span></h2>
       <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">可选中表格后 Ctrl+C 复制</span>
       <button class="btn btn-outline btn-sm" onclick="copyOrderTable()" style="margin-left:8px;">📋 一键复制</button>
     </div>
@@ -3610,6 +3613,18 @@ function calculatePlan() {
 // ==================== BATCH CALCULATION ====================
 // Save/restore DOM values for batch mode product calculations
 
+// 本周下单量：基于生产周期（lead time），本周（orderWeek=0）只需下
+// 生产周期后到货的那批订单，远期需求按周滚动下单（orderWeek>0），
+// 避免一次性下完所有订单。建议下单计算逻辑不变，此函数仅把
+// "本周需下的单量"单独取出来（优先用未受产能限制的 originalAmount）。
+function getThisWeekOrderQty(plan) {
+  if (!plan || !plan.replenishments) return 0;
+  return plan.replenishments
+    .filter(r => (r.orderWeek === 0))
+    .reduce((a, r) => a + (r.originalAmount || r.amount || 0), 0);
+}
+
+
 function saveFormState() {
   const fields = ['materialName','specCode','category','categoryLevel3','colorSet','brand','region','site','destWarehouse',
     'productUnit','casesPerUnit','productWeight','productVolume','regularMethod',
@@ -4616,6 +4631,7 @@ function renderBatchSummary(resultsToRender) {
       <td>${totalDomProd > 0 ? fmt(totalDomProd) : '--'}</td>
       <td>${fmt(totalDemand)}</td>
       <td><strong>${fmt(totalReplen)}</strong></td>
+      <td><strong>${fmt(getThisWeekOrderQty(p))}</strong></td>
       <td>${capAdjLabel}</td>
       <td>${adjLabel}</td>
       <td>${containerLabel}</td>
@@ -4631,8 +4647,8 @@ function renderBatchSummary(resultsToRender) {
   tbody.innerHTML = html;
 
   // --- Group subtotal footer ---
-  let cCount = 0, cDemand = 0, cReplen = 0, cShipCost = 0, cStockout = 0;
-  let rCount = 0, rDemand = 0, rReplen = 0, rShipCost = 0, rStockout = 0;
+  let cCount = 0, cDemand = 0, cReplen = 0, cThisWeek = 0, cShipCost = 0, cStockout = 0;
+  let rCount = 0, rDemand = 0, rReplen = 0, rThisWeek = 0, rShipCost = 0, rStockout = 0;
   results.forEach(r => {
     const p = r.plan;
     const isContainer = p.containerInfo && p.containerInfo.adjusted;
@@ -4640,12 +4656,14 @@ function renderBatchSummary(resultsToRender) {
       cCount++;
       cDemand += p.demand.reduce((a,b)=>a+b,0);
       cReplen += p.replenishments.reduce((a,b)=>a+b.amount,0);
+      cThisWeek += getThisWeekOrderQty(p);
       cShipCost += p.totalShipCost;
       cStockout += p.weeklyPlan.filter(w => w.stockout > 0).length;
     } else {
       rCount++;
       rDemand += p.demand.reduce((a,b)=>a+b,0);
       rReplen += p.replenishments.reduce((a,b)=>a+b.amount,0);
+      rThisWeek += getThisWeekOrderQty(p);
       rShipCost += p.totalShipCost;
       rStockout += p.weeklyPlan.filter(w => w.stockout > 0).length;
     }
@@ -4659,6 +4677,7 @@ function renderBatchSummary(resultsToRender) {
       <td></td>
       <td>${fmt(cDemand)}</td>
       <td>${fmt(cReplen)}</td>
+      <td>${fmt(cThisWeek)}</td>
       <td></td><td></td><td></td>
       <td>${fmtMoney(cShipCost)}</td>
       <td>${cStockout}</td>
@@ -4673,6 +4692,7 @@ function renderBatchSummary(resultsToRender) {
       <td></td>
       <td>${fmt(rDemand)}</td>
       <td>${fmt(rReplen)}</td>
+      <td>${fmt(rThisWeek)}</td>
       <td></td><td></td><td></td>
       <td>${fmtMoney(rShipCost)}</td>
       <td>${rStockout}</td>
@@ -4687,6 +4707,7 @@ function renderBatchSummary(resultsToRender) {
       <td></td>
       <td>${fmt(cDemand + rDemand)}</td>
       <td>${fmt(cReplen + rReplen)}</td>
+      <td>${fmt(cThisWeek + rThisWeek)}</td>
       <td></td><td></td><td></td>
       <td>${fmtMoney(cShipCost + rShipCost)}</td>
       <td>${cStockout + rStockout}</td>
@@ -4758,6 +4779,7 @@ function renderContainerSummary() {
   let totalDemand = 0;
   let totalReplen = 0;
   let totalOriginalReplen = 0;
+  let totalThisWeek = 0;
   let totalShipCost = 0;
   let stockoutWeeks = 0;
   // 可供缺口: 产能受限产品的 建议下单 - 实际下单
@@ -4776,6 +4798,7 @@ function renderContainerSummary() {
       totalReplen += replen;
       const orig = r.plan.originalRecommendedQty !== undefined ? r.plan.originalRecommendedQty : replen;
       totalOriginalReplen += orig;
+      totalThisWeek += getThisWeekOrderQty(r.plan);
       totalShipCost += r.plan.totalShipCost;
       stockoutWeeks += r.plan.weeklyPlan.filter(w => w.stockout > 0).length;
       // 可供缺口: 产能受限产品按 建议下单 - 实际下单
@@ -4812,6 +4835,10 @@ function renderContainerSummary() {
           <div class="label">建议下单</div>
           <div class="value">${fmt(totalOriginalReplen)}</div>
         </div>
+        <div class="summary-card accent">
+          <div class="label">本周下单</div>
+          <div class="value">${fmt(totalThisWeek)}</div>
+        </div>
         ${totalReplen !== totalOriginalReplen ? `
         <div class="summary-card ${stockoutWeeks > 0 ? 'warning' : 'success'}">
           <div class="label">实际下单总量</div>
@@ -4843,6 +4870,7 @@ function renderRegularSummary() {
   let totalDemand = 0;
   let totalReplen = 0;
   let totalOriginalReplen = 0;
+  let totalThisWeek = 0;
   let totalShipCost = 0;
   let stockoutWeeks = 0;
   // 可供缺口: 产能受限产品的 建议下单 - 实际下单
@@ -4858,6 +4886,7 @@ function renderRegularSummary() {
     totalReplen += replen;
     const orig = r.plan.originalRecommendedQty !== undefined ? r.plan.originalRecommendedQty : replen;
     totalOriginalReplen += orig;
+    totalThisWeek += getThisWeekOrderQty(r.plan);
     totalShipCost += r.plan.totalShipCost;
     stockoutWeeks += r.plan.weeklyPlan.filter(w => w.stockout > 0).length;
     // 可供缺口: 产能受限产品按 建议下单 - 实际下单
@@ -4884,6 +4913,10 @@ function renderRegularSummary() {
         <div class="summary-card accent">
           <div class="label">建议下单</div>
           <div class="value">${fmt(totalOriginalReplen)}</div>
+        </div>
+        <div class="summary-card accent">
+          <div class="label">本周下单</div>
+          <div class="value">${fmt(totalThisWeek)}</div>
         </div>
         ${totalReplen !== totalOriginalReplen ? `
         <div class="summary-card ${stockoutWeeks > 0 ? 'warning' : 'success'}">
@@ -5036,6 +5069,7 @@ function renderBatchSummaryByLevel3() {
     idx++;
     let totalDemand = 0;
     let totalReplen = 0;
+    let totalThisWeek = 0;
     let totalShipCost = 0;
     let stockoutWeeks = 0;
     let totalContainers = 0;
@@ -5044,6 +5078,7 @@ function renderBatchSummaryByLevel3() {
       const p = r.plan;
       totalDemand += p.demand.reduce((a,b)=>a+b,0);
       totalReplen += p.replenishments.reduce((a,b)=>a+b.amount,0);
+      totalThisWeek += getThisWeekOrderQty(p);
       totalShipCost += p.totalShipCost;
       stockoutWeeks += p.weeklyPlan.filter(w => w.stockout > 0).length;
       const ci = p.containerInfo;
@@ -5063,6 +5098,7 @@ function renderBatchSummaryByLevel3() {
       <td>${g.results.length}</td>
       <td>${fmt(totalDemand)}</td>
       <td><strong>${fmt(totalReplen)}</strong></td>
+      <td><strong>${fmt(totalThisWeek)}</strong></td>
       ${containerCol}
       <td>${fmtMoney(totalShipCost)}</td>
       <td class="${stockoutWeeks > 0 ? 'cell-danger' : ''}">${stockoutWeeks > 0 ? '<strong>'+stockoutWeeks+'</strong>' : '0'}</td>
@@ -5073,8 +5109,8 @@ function renderBatchSummaryByLevel3() {
   tbody.innerHTML = html || '<tr><td colspan="10" style="color:var(--text-muted);padding:16px;">暂无数据</td></tr>';
 
   // --- Group subtotal footer for L3 table ---
-  let l3cCount = 0, l3cDemand = 0, l3cReplen = 0, l3cShipCost = 0, l3cStockout = 0;
-  let l3rCount = 0, l3rDemand = 0, l3rReplen = 0, l3rShipCost = 0, l3rStockout = 0;
+  let l3cCount = 0, l3cDemand = 0, l3cReplen = 0, l3cThisWeek = 0, l3cShipCost = 0, l3cStockout = 0;
+  let l3rCount = 0, l3rDemand = 0, l3rReplen = 0, l3rThisWeek = 0, l3rShipCost = 0, l3rStockout = 0;
   batchResults.forEach(r => {
     const p = r.plan;
     const isContainer = p.containerInfo && p.containerInfo.adjusted;
@@ -5082,12 +5118,14 @@ function renderBatchSummaryByLevel3() {
       l3cCount++;
       l3cDemand += p.demand.reduce((a,b)=>a+b,0);
       l3cReplen += p.replenishments.reduce((a,b)=>a+b.amount,0);
+      l3cThisWeek += getThisWeekOrderQty(p);
       l3cShipCost += p.totalShipCost;
       l3cStockout += p.weeklyPlan.filter(w => w.stockout > 0).length;
     } else {
       l3rCount++;
       l3rDemand += p.demand.reduce((a,b)=>a+b,0);
       l3rReplen += p.replenishments.reduce((a,b)=>a+b.amount,0);
+      l3rThisWeek += getThisWeekOrderQty(p);
       l3rShipCost += p.totalShipCost;
       l3rStockout += p.weeklyPlan.filter(w => w.stockout > 0).length;
     }
@@ -5099,6 +5137,7 @@ function renderBatchSummaryByLevel3() {
       <td colspan="4">🚢 整柜出运产品小计 (${l3cCount}个)</td>
       <td>${fmt(l3cDemand)}</td>
       <td>${fmt(l3cReplen)}</td>
+      <td>${fmt(l3cThisWeek)}</td>
       <td></td>
       <td>${fmtMoney(l3cShipCost)}</td>
       <td>${l3cStockout}</td>
@@ -5110,6 +5149,7 @@ function renderBatchSummaryByLevel3() {
       <td colspan="4">📦 散货出运产品小计 (${l3rCount}个)</td>
       <td>${fmt(l3rDemand)}</td>
       <td>${fmt(l3rReplen)}</td>
+      <td>${fmt(l3rThisWeek)}</td>
       <td></td>
       <td>${fmtMoney(l3rShipCost)}</td>
       <td>${l3rStockout}</td>
@@ -5121,6 +5161,7 @@ function renderBatchSummaryByLevel3() {
       <td colspan="4">📊 全部合计</td>
       <td>${fmt(l3cDemand + l3rDemand)}</td>
       <td>${fmt(l3cReplen + l3rReplen)}</td>
+      <td>${fmt(l3cThisWeek + l3rThisWeek)}</td>
       <td></td>
       <td>${fmtMoney(l3cShipCost + l3rShipCost)}</td>
       <td>${l3cStockout + l3rStockout}</td>
@@ -5160,16 +5201,18 @@ function renderBatchOrderTable() {
   const tbody = document.getElementById('batchOrderTbody');
   const tfoot = document.getElementById('batchOrderTfoot');
 
-  // Collect all orders from all batch results
+  // Collect all orders from all batch results — 只输出本周下单（orderWeek=0）的订单
   const allOrders = [];
+  let hasAnyReplen = false;
   batchResults.forEach((r) => {
     const plan = r.plan;
     const product = r.product;
     if (!plan.replenishments || plan.replenishments.length === 0) return;
+    hasAnyReplen = true;
 
     const groups = [];
     const groupMap = {};
-    plan.replenishments.forEach(rp => {
+    plan.replenishments.filter(rp => rp.orderWeek === 0).forEach(rp => {
       const key = rp.orderWeek + '|' + rp.method.name + '|' + rp.arriveWeek;
       if (!groupMap[key]) {
         groupMap[key] = {
@@ -5193,7 +5236,14 @@ function renderBatchOrderTable() {
   });
 
   if (allOrders.length === 0) {
-    card.style.display = 'none';
+    if (hasAnyReplen) {
+      // 有补货计划但本周无需下单 — 显示提示而不是隐藏
+      card.style.display = '';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:20px;">✅ 本周无需下单，后续订单将按周滚动下单</td></tr>';
+      tfoot.innerHTML = '';
+    } else {
+      card.style.display = 'none';
+    }
     return;
   }
   card.style.display = '';
@@ -5326,6 +5376,10 @@ function renderBatchDetail(idx) {
   const shipMethodOptions = getShippingMethods().map(m => '<option value="'+escHtml(m.name)+'">'+escHtml(m.name)+'</option>').join('');
   plan.weeklyPlan.forEach((p, idx) => {
     const weekSafety = (plan.weeklySafetyStock || [])[idx] != null ? plan.weeklySafetyStock[idx] : plan.safetyStock;
+    // 建议本周下单量 = 本行（到货周）中属于本周下单（orderWeek=0）的量
+    const thisWeekQty = (plan.replenishments || [])
+      .filter(r => r.arriveWeek === idx && r.orderWeek === 0)
+      .reduce((a, r) => a + (r.originalAmount || r.amount || 0), 0);
     const statusClass = p.stockout > 0 ? 'cell-danger' : (p.endingInv < weekSafety ? 'cell-warn' : 'cell-ok');
     const recClass = p.recommendedQty > 0 ? 'cell-plan' : '';
     const allocClass = p.allocatedQty > 0 ? 'cell-plan' : '';
@@ -5350,6 +5404,9 @@ function renderBatchDetail(idx) {
       <td>${fmt(p.endingInv)}</td>
       <td class="${recClass}" style="padding:2px 4px;">
         <input type="number" id="recQty_${p.week}" value="${isSupply ? (p.rawRecommendedQty || 0) : (p.recommendedQty || 0)}" min="0" style="width:70px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateRecQtyBatch(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
+      </td>
+      <td class="cell-plan" style="padding:2px 4px;text-align:center;font-weight:600;">
+        ${thisWeekQty > 0 ? '<strong>'+fmt(thisWeekQty)+'</strong>' : '--'}
       </td>
       ${hasCapacityConstraint ? `<td class="${allocClass}" style="padding:2px 4px;">
         <input type="number" id="allocQty_${p.week}" value="${(p.allocatedQty || 0)}" min="0" style="width:70px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateAllocatedQtyBatch(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
@@ -5380,13 +5437,14 @@ function renderBatchDetail(idx) {
   const allocatedQtyTotal = totalReplen;
   const stockoutWeeks = plan.weeklyPlan.filter(w => w.stockout > 0).length;
 
-  // Order table for this product
+  // Order table for this product — 只输出本周下单（orderWeek=0）的订单
   let orderHtml = '';
   let orderTotalAmount = 0, orderTotalCost = 0, orderGroupCount = 0;
-  if (plan.replenishments && plan.replenishments.length > 0) {
+  const thisWeekReps = (plan.replenishments || []).filter(r => r.orderWeek === 0);
+  if (thisWeekReps.length > 0) {
     const groups = [];
     const groupMap = {};
-    plan.replenishments.forEach(r => {
+    thisWeekReps.forEach(r => {
       const key = r.orderWeek + '|' + r.method.name + '|' + r.arriveWeek;
       if (!groupMap[key]) { groupMap[key] = { orderWeek: r.orderWeek, arriveWeek: r.arriveWeek, method: r.method, amount: 0, cost: 0 }; groups.push(groupMap[key]); }
       groupMap[key].amount += r.amount;
@@ -5413,6 +5471,8 @@ function renderBatchDetail(idx) {
       orderTotalAmount += g.amount;
       orderTotalCost += g.cost;
     });
+  } else if (plan.replenishments && plan.replenishments.length > 0) {
+    orderHtml = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:16px;">✅ 本周无需下单，后续订单按周滚动下单</td></tr>';
   }
 
   const detailHtml = `
@@ -5428,6 +5488,7 @@ function renderBatchDetail(idx) {
         <div class="summary-card accent"><div class="label">规划周期</div><div class="value">${plan.weeks} 周</div></div>
         <div class="summary-card accent"><div class="label">预测总需求</div><div class="value">${fmt(totalDemand)}</div></div>
         <div class="summary-card ${stockoutWeeks > 0 ? 'warning' : 'success'}"><div class="label">建议下单</div><div class="value">${fmt(originalQty)}</div></div>
+        <div class="summary-card accent"><div class="label">本周下单数量</div><div class="value">${fmt(getThisWeekOrderQty(plan))}</div></div>
         ${plan.capacityInfo ? `<div class="summary-card warning"><div class="label">产能受限分配数量</div><div class="value" title="${escHtml(plan.capacityInfo.capacityNote || '')}">${fmt(allocatedQtyTotal)}</div></div>` : ''}
         ${totalReplen !== originalQty && !plan.capacityInfo ? `<div class="summary-card ${stockoutWeeks > 0 ? 'warning' : 'success'}"><div class="label">实际下单总量</div><div class="value">${fmt(totalReplen)}</div></div>` : ''}
         <div class="summary-card ${stockoutWeeks > 0 ? 'warning' : 'success'}"><div class="label">缺货周数</div><div class="value">${stockoutWeeks}</div></div>
@@ -5448,18 +5509,18 @@ function renderBatchDetail(idx) {
 
       <h4 style="margin-bottom:8px;">出货与补货计划 <span style="font-weight:normal;font-size:12px;color:var(--text-muted);">（点击数量单元格可编辑调整${plan.containerInfo && plan.containerInfo.adjusted ? '，输入后自动按整柜取整' : ''}）</span></h4>
       <div class="result-table-wrap" style="max-height:500px;">
-        <table class="result-table" style="min-width:2000px;">
+        <table class="result-table" style="min-width:2100px;">
           <colgroup>
             <col><col><col><col>
             <col class="arrival-detail-col"><col class="arrival-detail-col"><col class="arrival-detail-col">
-            <col><col><col><col><col><col><col><col><col><col><col><col>
+            <col><col><col><col><col><col><col><col><col><col><col><col><col>
           </colgroup>
           <thead><tr>
             <th>周次</th><th>日期范围</th><th>期初可售</th>            <th>本周到货 <button class="arrival-toggle-btn arrival-batch-toggle" onclick="toggleArrivalDetailBatch()" title="展开/折叠到货明细"></button></th>
             <th class="arrival-detail-col arrival-detail-header">海外仓到货</th>
             <th class="arrival-detail-col arrival-detail-header">国内在途到仓</th>
             <th class="arrival-detail-col arrival-detail-header">国内在制到仓</th>
-            <th>本周需求</th><th>实际周销量</th><th>预计断货数量</th><th>预计断货时间点</th><th>期末库存</th><th>建议下单量</th>${hasCapacityConstraint ? '<th>产能分配后下单数</th>' : ''}<th>预计到仓时间</th><th>下单到仓天数</th><th>建议下单时间</th><th>建议出货时间</th><th>运输方式</th><th>运输成本</th><th>状态</th>
+            <th>本周需求</th><th>实际周销量</th><th>预计断货数量</th><th>预计断货时间点</th><th>期末库存</th><th>建议下单量</th><th>建议本周下单量</th>${hasCapacityConstraint ? '<th>产能分配后下单数</th>' : ''}<th>预计到仓时间</th><th>下单到仓天数</th><th>建议下单时间</th><th>建议出货时间</th><th>运输方式</th><th>运输成本</th><th>状态</th>
           </tr></thead>
           <tbody>${planHtml}</tbody>
         </table>
@@ -5478,12 +5539,12 @@ function renderBatchDetail(idx) {
       </div>
 
       ${orderHtml ? `
-      <h4 style="margin:16px 0 8px;">补货下单表</h4>
+      <h4 style="margin:16px 0 8px;">补货下单表 <span style="font-weight:normal;font-size:12px;color:var(--text-muted);">（仅本周需下的单，远期订单按周滚动）</span></h4>
       <div class="result-table-wrap">
         <table class="result-table" style="min-width:900px;">
           <thead><tr><th>三级</th><th>料品编码</th><th>存货名称</th><th>规格型号</th><th>数量</th><th>需求日期</th><th>运输方式</th><th>站点</th><th>区域</th><th>目的仓库</th><th>备注</th></tr></thead>
           <tbody>${orderHtml}</tbody>
-          <tfoot><tr style="font-weight:700;background:#e8e8e8;"><td colspan="4"><strong>合计：${orderTotalAmount > 0 ? orderGroupCount : 0} 批</strong></td><td><strong>${fmt(orderTotalAmount)}套</strong></td><td colspan="4">--</td><td><strong>${fmtMoney(orderTotalCost)}</strong></td><td>--</td></tr></tfoot>
+          ${orderTotalAmount > 0 ? `<tfoot><tr style="font-weight:700;background:#e8e8e8;"><td colspan="4"><strong>合计：${orderGroupCount} 批</strong></td><td><strong>${fmt(orderTotalAmount)}套</strong></td><td colspan="4">--</td><td><strong>${fmtMoney(orderTotalCost)}</strong></td><td>--</td></tr></tfoot>` : ''}
         </table>
       </div>` : ''}
     </div>`;
@@ -6381,6 +6442,10 @@ function renderPlanTableData(plan) {
     // partial qty.
     const isSupply = currentMode === 'supply';
     const displayRecQty = p.recommendedQty || p.rawRecommendedQty || 0;
+    // 建议本周下单量 = 本行（到货周）中属于本周下单（orderWeek=0）的量
+    const thisWeekQty = (plan.replenishments || [])
+      .filter(r => r.arriveWeek === idx && r.orderWeek === 0)
+      .reduce((a, r) => a + (r.originalAmount || r.amount || 0), 0);
     // ALL rows are editable — always show inputs
     const isLowStock = p.endingInv < weekSafety && p.stockout === 0;
     const recClass = 'cell-plan';
@@ -6404,6 +6469,9 @@ function renderPlanTableData(plan) {
         <td>${fmt(p.endingInv)}</td>
         <td class="${recClass}" style="padding:2px 4px;">
           <input type="number" id="recQty_${p.week}" value="${displayRecQty}" min="0" style="width:80px;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;" onchange="updateRecQty(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
+        </td>
+        <td class="cell-plan" style="padding:2px 4px;text-align:center;font-weight:600;">
+          ${thisWeekQty > 0 ? '<strong>'+fmt(thisWeekQty)+'</strong>' : '--'}
         </td>
         <td class="supplyCapCol recClass" style="padding:2px 4px;${!isSupply ? 'display:none;' : ''}">
           <input type="number" id="capQty_${p.week}" value="${(p.allocatedQty != null ? p.allocatedQty : displayRecQty)}" min="0" style="width:80px;font-size:12px;padding:4px 6px;border:1px solid #e37400;border-radius:4px;background:#fff8f0;" onchange="updateCapQty(${p.week}, this.value)" onfocus="showPlanConfirmBtn()" onblur="hidePlanConfirmBtnDelayed()">
@@ -6522,6 +6590,10 @@ function renderSummaryCards(plan, isEdited) {
     <div class="summary-card ${plan.hasStockout ? 'warning' : 'success'}">
       <div class="label">建议下单总量</div>
       <div class="value">${fmt(originalQty)}</div>
+    </div>
+    <div class="summary-card accent">
+      <div class="label">本周下单数量</div>
+      <div class="value">${fmt(getThisWeekOrderQty(plan))}</div>
     </div>
     ${showActual ? `
     <div class="summary-card ${plan.hasStockout ? 'warning' : 'success'}">
@@ -7029,6 +7101,15 @@ function renderOrderTable(plan) {
   }
   card.style.display = '';
 
+  // 补货下单表只输出本周下单（orderWeek=0）的订单；
+  // 远期订单按生产周期每周滚动下单，不在本次下单表内。
+  const thisWeekReps = plan.replenishments.filter(r => r.orderWeek === 0);
+  if (thisWeekReps.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:20px;">✅ 本周无需下单，后续订单将按周滚动下单</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
   const cartonSize = plan.cartonSize || 1;
   const catL3 = getStr('categoryLevel3');
   const matCode = getStr('materialCode');
@@ -7041,7 +7122,7 @@ function renderOrderTable(plan) {
   // Group by (orderWeek, method name) for clean order lines
   const groups = [];
   const groupMap = {};
-  plan.replenishments.forEach(r => {
+  thisWeekReps.forEach(r => {
     const key = r.orderWeek + '|' + r.method.name + '|' + r.arriveWeek;
     if (!groupMap[key]) {
       groupMap[key] = {
