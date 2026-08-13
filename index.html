@@ -700,6 +700,11 @@ body.fullscreen-active .chart-box canvas { max-height: 520px; }
       </div>
       <button type="button" class="btn btn-outline btn-sm" onclick="addPipelineBatch('domInProdBatches', 'domProd')" style="margin-top:6px;">+ 添加批次</button>
     </div>
+    <div style="grid-column:1 / -1;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('trackingFileInputMode12').click()">📋 导入采购跟踪表</button>
+      <span class="hint" style="font-size:12px;">自动填充多票国内在途/在制（按料品编码匹配，需先填写「料品编码」；库存与其余供应管道保持不变）</span>
+      <input type="file" id="trackingFileInputMode12" accept=".xlsx,.xls" style="display:none" onchange="importTrackingTableMode12(this)">
+    </div>
   </div>
 </div>
 
@@ -4245,6 +4250,83 @@ function batchImportData(input) {
 }
 
 // ==================== TRACKING TABLE IMPORT ====================
+// 解析采购跟踪表「全量明细」工作表 → { trackingData, missing, empty, parseErrCount }
+// trackingData: { 物料编码: { transits: [{qty, weeks}], prods: [{qty, weeks}] } }
+// getTransitDays(matCode)：返回该物料常规运输时效（天），用于在制未确认交期时估算到仓周数
+// （模式3 查 batchProducts 的 regularMethod；模式1/2 查当前表单 regularMethod）
+function parseTrackingWorkbook(ws, getTransitDays) {
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  if (rows.length < 2) return { trackingData: {}, missing: [], empty: true, parseErrCount: 0 };
+
+  const headers = rows[0].map(h => String(h || '').trim());
+  const colIndex = {};
+  const targetCols = ['打单物料编码', '在途数量', '预计入库时间', '未交数量', '回复出货日期', '运输时效'];
+  headers.forEach((h, i) => { if (targetCols.includes(h)) colIndex[h] = i; });
+
+  const missing = targetCols.filter(c => colIndex[c] === undefined);
+  if (missing.length > 0) return { trackingData: {}, missing, empty: false, parseErrCount: 0 };
+
+  // Group tracking data by material code
+  const trackingData = {};
+  let parseErrCount = 0;
+  const now = new Date();
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.every(c => c === undefined || c === null)) continue;
+
+    const materialCode = String(row[colIndex['打单物料编码']] || '').trim();
+    if (!materialCode) continue;
+
+    const transitQty = parseFloat(row[colIndex['在途数量']]) || 0;
+    const uncommittedQty = parseFloat(row[colIndex['未交数量']]) || 0;
+    let transitTimeVal = parseFloat(row[colIndex['运输时效']]) || 0;
+
+    // Parse date values (per-field error tolerance, never skip entire row)
+    let etaDate = null;
+    let shipDate = null;
+    const etaRaw = row[colIndex['预计入库时间']];
+    if (etaRaw) { try { etaDate = parseExcelDate(etaRaw); } catch(e) { parseErrCount++; } }
+    const shipRaw = row[colIndex['回复出货日期']];
+    if (shipRaw) { try { shipDate = parseExcelDate(shipRaw); } catch(e) { parseErrCount++; } }
+
+    if (!trackingData[materialCode]) {
+      trackingData[materialCode] = { transits: [], prods: [] };
+    }
+
+    // In-transit: 在途数量 > 0
+    if (transitQty > 0 && etaDate) {
+      const weeks = dateToWeeks(etaDate, now);
+      trackingData[materialCode].transits.push({ qty: Math.round(transitQty), weeks });
+    }
+
+    // In-production: 未交数量 > 0（不依赖 confirmed shipDate，已下单即计入）
+    if (uncommittedQty > 0) {
+      // Determine effective transit days: tracking table > product regular method
+      let effectiveTransit = transitTimeVal;
+      if (effectiveTransit <= 0 && typeof getTransitDays === 'function') {
+        const d = getTransitDays(materialCode);
+        if (d > 0) effectiveTransit = d;
+      }
+      if (effectiveTransit <= 0) effectiveTransit = 35; // last-resort default
+
+      let weeks;
+      if (shipDate) {
+        // Confirmed ship date: arrivalDate = shipDate + transit
+        const arrivalDate = new Date(shipDate.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
+        weeks = dateToWeeks(arrivalDate, now);
+      } else {
+        // No confirmed ship date: estimate arrival = now + transit (conservative)
+        const defaultArrival = new Date(now.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
+        weeks = dateToWeeks(defaultArrival, now);
+      }
+      trackingData[materialCode].prods.push({ qty: Math.round(uncommittedQty), weeks });
+    }
+  }
+
+  return { trackingData, missing, empty: false, parseErrCount };
+}
+
 // Import procurement tracking table (采购跟踪表) and auto-fill domestic in-transit/production data
 function importTrackingTable(input) {
   const file = input.files[0];
@@ -4265,25 +4347,6 @@ function importTrackingTable(input) {
         alert('未找到「全量明细」工作表，请确认文件格式正确。');
         return;
       }
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      if (rows.length < 2) { alert('跟踪表数据为空'); return; }
-
-      const headers = rows[0].map(h => String(h || '').trim());
-
-      // Find column indices for key fields
-      const colIndex = {};
-      const targetCols = ['打单物料编码', '在途数量', '预计入库时间', '未交数量', '回复出货日期', '运输时效'];
-      headers.forEach((h, i) => {
-        if (targetCols.includes(h)) colIndex[h] = i;
-      });
-
-      // Validate required columns
-      if (!colIndex['打单物料编码']) { alert('未找到「打单物料编码」列'); return; }
-      if (!colIndex['在途数量']) { alert('未找到「在途数量」列'); return; }
-      if (!colIndex['预计入库时间']) { alert('未找到「预计入库时间」列'); return; }
-      if (!colIndex['未交数量']) { alert('未找到「未交数量」列'); return; }
-      if (!colIndex['回复出货日期']) { alert('未找到「回复出货日期」列'); return; }
-      if (!colIndex['运输时效']) { alert('未找到「运输时效」列'); return; }
 
       // Build product lookup map: 物料编码 → batchProducts index
       const productMap = {};
@@ -4294,73 +4357,21 @@ function importTrackingTable(input) {
         }
       });
 
-      // Group tracking data by material code
-      // Structure: { materialCode: { transits: [{qty, weeks}], prods: [{qty, weeks}] } }
-      const trackingData = {};
-      let parseErrCount = 0;
-      const now = new Date();
-
-      for (let r = 1; r < rows.length; r++) {
-        const row = rows[r];
-        if (!row || row.every(c => c === undefined || c === null)) continue;
-
-        const materialCode = String(row[colIndex['打单物料编码']] || '').trim();
-        if (!materialCode) continue;
-
-        const transitQty = parseFloat(row[colIndex['在途数量']]) || 0;
-        const uncommittedQty = parseFloat(row[colIndex['未交数量']]) || 0;
-        let transitTimeVal = parseFloat(row[colIndex['运输时效']]) || 0;
-
-        // Parse date values (per-field error tolerance, never skip entire row)
-        let etaDate = null;
-        let shipDate = null;
-        const etaRaw = row[colIndex['预计入库时间']];
-        if (etaRaw) {
-          try { etaDate = parseExcelDate(etaRaw); } catch(e) { parseErrCount++; }
-        }
-        const shipRaw = row[colIndex['回复出货日期']];
-        if (shipRaw) {
-          try { shipDate = parseExcelDate(shipRaw); } catch(e) { parseErrCount++; }
-        }
-
-        if (!trackingData[materialCode]) {
-          trackingData[materialCode] = { transits: [], prods: [] };
-        }
-
-        // In-transit: 在途数量 > 0
-        if (transitQty > 0 && etaDate) {
-          const weeks = dateToWeeks(etaDate, now);
-          trackingData[materialCode].transits.push({ qty: Math.round(transitQty), weeks });
-        }
-
-        // In-production: 未交数量 > 0（不依赖 confirmed shipDate，已下单即计入）
-        if (uncommittedQty > 0) {
-          // Determine effective transit days: tracking table > product regular method
-          let effectiveTransit = transitTimeVal;
-          if (effectiveTransit <= 0) {
-            const prodIdx = productMap[materialCode];
-            if (prodIdx !== undefined) {
-              const prod = batchProducts[prodIdx];
-              const methods = getShippingMethods();
-              const rm = methods.find(m => m.name === prod.regularMethod);
-              if (rm) effectiveTransit = rm.leadDomDays || 0;
-            }
-          }
-          if (effectiveTransit <= 0) effectiveTransit = 35; // last-resort default
-
-          let weeks;
-          if (shipDate) {
-            // Confirmed ship date: arrivalDate = shipDate + transit
-            const arrivalDate = new Date(shipDate.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
-            weeks = dateToWeeks(arrivalDate, now);
-          } else {
-            // No confirmed ship date: estimate arrival = now + transit (conservative)
-            // 已下单但交期未确认，按常规运输时效估算
-            const defaultArrival = new Date(now.getTime() + effectiveTransit * 24 * 60 * 60 * 1000);
-            weeks = dateToWeeks(defaultArrival, now);
-          }
-          trackingData[materialCode].prods.push({ qty: Math.round(uncommittedQty), weeks });
-        }
+      const { trackingData, missing } = parseTrackingWorkbook(ws, (mc) => {
+        const idx = productMap[mc];
+        if (idx === undefined) return 0;
+        const prod = batchProducts[idx];
+        const methods = getShippingMethods();
+        const rm = methods.find(m => m.name === prod.regularMethod);
+        return rm ? rm.leadDomDays : 0;
+      });
+      if (missing.length > 0) {
+        alert('缺少必需列：' + missing.join('、'));
+        return;
+      }
+      if (Object.keys(trackingData).length === 0) {
+        alert('跟踪表中未找到有效数据');
+        return;
       }
 
       // Apply tracking data to matched products
@@ -4408,6 +4419,84 @@ function importTrackingTable(input) {
 
     } catch(err) {
       alert('采购跟踪表解析失败: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+// 模式1/2：单产品导入采购跟踪表，自动填充多票「国内在途/在制」。
+// 仅更新这两个字段（刷新批次行 UI），FBA 库存与其余供应管道保持现状不变。
+function importTrackingTableMode12(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets['全量明细'];
+      if (!ws) {
+        alert('未找到「全量明细」工作表，请确认文件格式正确。');
+        input.value = '';
+        return;
+      }
+
+      const { trackingData, missing } = parseTrackingWorkbook(ws, () => {
+        const methods = getShippingMethods();
+        const rm = methods.find(m => m.name === getVal('regularMethod'));
+        return rm ? rm.leadDomDays : 0;
+      });
+      if (missing.length > 0) {
+        alert('缺少必需列：' + missing.join('、'));
+        input.value = '';
+        return;
+      }
+      if (Object.keys(trackingData).length === 0) {
+        alert('跟踪表中未找到有效数据');
+        input.value = '';
+        return;
+      }
+
+      // 匹配当前表单产品：优先料品编码，其次规格型号
+      // 注意：不能用 getVal()（数值读取，会把编码转成 0），须按字符串读取
+      const matCodeEl = document.getElementById('materialCode');
+      const specCodeEl = document.getElementById('specCode');
+      const matCode = matCodeEl ? String(matCodeEl.value || '').trim() : '';
+      const specCode = specCodeEl ? String(specCodeEl.value || '').trim() : '';
+      let matchKey = null;
+      if (matCode && trackingData[matCode]) matchKey = matCode;
+      else if (specCode && trackingData[specCode]) matchKey = specCode;
+
+      if (!matchKey) {
+        alert('未在当前采购跟踪表中找到与「料品编码 ' + (matCode || '空') + '」匹配的行。\n请确认：1) 已填写料品编码；2) 跟踪表「打单物料编码」包含该编码。');
+        input.value = '';
+        return;
+      }
+
+      const d = trackingData[matchKey];
+      const transits = d.transits || [];
+      const prods = d.prods || [];
+
+      // 写入批次数据并刷新批次行 UI（getPipelineItems 从 DOM 批次行读取）
+      syncDomBatchesFromProduct({
+        domInTransit: transits.map(t => t.qty).join(','),
+        domInTransitWeeks: transits.map(t => t.weeks).join(','),
+        domInProd: prods.map(t => t.qty).join(','),
+        domInProdWeeks: prods.map(t => t.weeks).join(',')
+      });
+
+      const fillMsg = [
+        transits.length > 0 ? '国内在途 ' + transits.length + ' 票' : '',
+        prods.length > 0 ? '国内在制 ' + prods.length + ' 票' : ''
+      ].filter(Boolean).join('、');
+
+      alert('✅ 采购跟踪表导入完成！\n\n匹配物料：' + matchKey + '\n已填充：' + (fillMsg || '该物料无在途/在制数据') + '\n\n请点击「生成出货方案」重新计算。');
+      input.value = '';
+    } catch(err) {
+      alert('采购跟踪表解析失败: ' + err.message);
+      input.value = '';
     }
   };
   reader.readAsArrayBuffer(file);
