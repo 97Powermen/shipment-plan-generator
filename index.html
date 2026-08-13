@@ -6490,7 +6490,12 @@ function refreshAllFromEdits() {
       const methodName = p.method.split('、')[0];
       const method = methods.find(m => m.name === methodName);
       if (!method) return;
-      let orderWeek = p.week - Math.ceil((getVal('productionCycleDays') + method.leadDomDays + getVal('shelvingDays')) / 7);
+      // 与 calculatePlan 的 orderWeek 公式保持一致：
+      //   calculatePlan: orderWeek = max(0, arriveWeek - ceil((prod+lead)/7) + 1)
+      //   其中 arriveWeek(0-based) = p.week - 1 → 等价于 p.week - ceil((prod+lead)/7)
+      // 注意：此处不包含 shelvingDays（与原始算法一致），否则会把
+      // "下周下单"的批次错误归入本周下单，导致确认后下单表凭空多出数量。
+      let orderWeek = p.week - Math.ceil((getVal('productionCycleDays') + method.leadDomDays) / 7);
       if (orderWeek < 0) orderWeek = 0;
       lastGeneratedPlan.replenishments.push({
         orderWeek: orderWeek,
