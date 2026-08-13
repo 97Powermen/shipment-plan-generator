@@ -4549,7 +4549,7 @@ function batchCalculate() {
   switchPage('analysis');
 }
 
-function renderBatchSummary(resultsToRender) {
+function renderBatchSummary(resultsToRender, preserveDetail) {
   const results = resultsToRender || batchResults;
   const tbody = document.getElementById('batchSummaryTbody');
   const unit = getStr('productUnit') || '件';
@@ -4718,7 +4718,11 @@ function renderBatchSummary(resultsToRender) {
   tfoot2.innerHTML = footHtml;
 
   destroyBatchCharts();
-  document.getElementById('batchDetailContainer').innerHTML = '';
+  // 编辑确认（syncBatchSummaryFromEdit）时保留已展开的详情；
+  // 仅批量重新计算（batchCalculate）等场景才清空详情，等待用户重新展开。
+  if (!preserveDetail) {
+    document.getElementById('batchDetailContainer').innerHTML = '';
+  }
 
   // Render combined order table
   renderBatchOrderTable();
@@ -5873,6 +5877,15 @@ function refreshAllFromEditsBatch() {
   });
 
   // 2. Rebuild replenishments (allocated amount drives the actual order; originalAmount preserves the recommendation)
+  // 重建前保存原始批次 orderWeek（按 arriveWeek 索引），重建时优先沿用——
+  // 原始 orderWeek 由 calculatePlan 权威公式生成；若重建时硬编码（如 p.week-5）
+  // 或读到的生产周期/运输参数与该产品不一致，会把本周批次错算成远期批次，
+  // 导致确认修改后其他行"本周下单量"丢失。
+  const origOrderWeeks = {};
+  plan.replenishments.forEach(r => {
+    if (origOrderWeeks[r.arriveWeek] === undefined) origOrderWeeks[r.arriveWeek] = r.orderWeek;
+  });
+  const prodDays = +getVal('productionCycleDays') || 30;
   plan.replenishments = [];
   const methods = getShippingMethods();
   plan.weeklyPlan.forEach(p => {
@@ -5889,11 +5902,18 @@ function refreshAllFromEditsBatch() {
           const containers = Math.max(1, Math.round(allocQty / upc));
           cost = containers * cfg.cost;
         }
+        // 与 calculatePlan 对齐的 orderWeek 公式（arriveWeek = p.week - 1）：
+        //   orderWeek = max(0, arriveWeek - ceil((prod+lead)/7) + 1)
+        //            = max(0, p.week - ceil((prod+lead)/7))
+        let orderWeek = origOrderWeeks[p.week - 1];
+        if (orderWeek === undefined) {
+          orderWeek = Math.max(0, p.week - Math.ceil((prodDays + method.leadDomDays) / 7));
+        }
         plan.replenishments.push({
           amount: allocQty,
           originalAmount: p.recommendedQty,
           arriveWeek: p.week - 1,
-          orderWeek: plan.replenOrderWeeks ? plan.replenOrderWeeks.find(r => r.arriveWeek === p.week)?.orderWeek ?? (p.week - 5) : p.week - 5,
+          orderWeek: orderWeek,
           method: method,
           cost: cost
         });
@@ -5966,7 +5986,8 @@ function syncBatchSummaryFromEdit() {
   }
 
   // Re-render batch summary row for this product
-  renderBatchSummary();
+  // preserveDetail=true：编辑确认后保留已展开的详情，避免详情被清空
+  renderBatchSummary(batchResults, true);
   // Re-render combined order table
   renderBatchOrderTable();
 }
@@ -6402,11 +6423,13 @@ function hidePlanConfirmBtnDelayed() {
 function refreshAllFromEdits() {
   if (!lastGeneratedPlan) return;
 
-  // Find the confirm button in plan table card
-  const planCard = document.querySelector('#resultsSection .card:has(#planTbody) .btn-confirm');
-  if (planCard) planCard.classList.add('loading');
+  // Find the confirm button in plan table card.
+  // 注意：不要用 :has() 等新式选择器——部分浏览器（Chrome<105 等）不支持会抛
+  // SyntaxError，且此语句位于 try 外，会导致「确认修改」按钮点击无反应。
+  const planCard = document.getElementById('planTableCard');
 
   try {
+    if (planCard) planCard.classList.add('loading');
     // 1. Read ALL editable inputs from the plan table DOM (even weeks that had no qty before)
     const methods = getShippingMethods();
     const isSupply = currentMode === 'supply';
@@ -6482,6 +6505,13 @@ function refreshAllFromEdits() {
     });
 
     // 2. Rebuild replenishments from weeklyPlan data
+    // 重建前保存原始批次 orderWeek（按 arriveWeek 索引），重建时优先沿用——
+    // 原始 orderWeek 由 calculatePlan 权威公式生成；重建时若读到的生产周期/
+    // 运输参数与生成时不一致（如表单被批量恢复），硬算会把本周批次错位。
+    const origOrderWeeks = {};
+    lastGeneratedPlan.replenishments.forEach(r => {
+      if (origOrderWeeks[r.arriveWeek] === undefined) origOrderWeeks[r.arriveWeek] = r.orderWeek;
+    });
     lastGeneratedPlan.replenishments = [];
     lastGeneratedPlan.weeklyPlan.forEach(p => {
       const effQty = isSupply ? (p.allocatedQty || 0) : p.recommendedQty;
@@ -6495,8 +6525,11 @@ function refreshAllFromEdits() {
       //   其中 arriveWeek(0-based) = p.week - 1 → 等价于 p.week - ceil((prod+lead)/7)
       // 注意：此处不包含 shelvingDays（与原始算法一致），否则会把
       // "下周下单"的批次错误归入本周下单，导致确认后下单表凭空多出数量。
-      let orderWeek = p.week - Math.ceil((getVal('productionCycleDays') + method.leadDomDays) / 7);
-      if (orderWeek < 0) orderWeek = 0;
+      let orderWeek = origOrderWeeks[p.week - 1];
+      if (orderWeek === undefined) {
+        orderWeek = p.week - Math.ceil((getVal('productionCycleDays') + method.leadDomDays) / 7);
+        if (orderWeek < 0) orderWeek = 0;
+      }
       lastGeneratedPlan.replenishments.push({
         orderWeek: orderWeek,
         arriveWeek: p.week - 1,
